@@ -1,0 +1,28 @@
+# OpenFOAM generated case outputs
+[0-9]*/
+processor*/
+postProcessing/
+VTK/
+*.foam
+*.OpenFOAM
+*.vtk
+*.vtu
+*.vtp
+*.case
+log.*
+*.log
+*.dat
+# Local compilation
+platforms/
+**/Make/linux*/
+*.dep
+*.o
+*.so
+# Cache and datasets
+.cache/
+__pycache__/
+.pytest_cache/
+*.pyc
+# Temporary probe logs
+reports/
+!docs/reports/

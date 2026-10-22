@@ -1,0 +1,32 @@
+name: M0 OpenFOAM v2606 development image probe
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-dev-image-probe.yml'
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/probe_dev_images.sh'
+      - 'docker/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image-probe:
+    name: Pull and compile in v2606 image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Probe official dev and third-party fallback
+        shell: bash
+        run: bash scripts/probe_dev_images.sh
+      - name: Save provenance and compiler evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2606-dev-image-probe
+          path: reports/docker-image-probe.txt
+          if-no-files-found: warn
