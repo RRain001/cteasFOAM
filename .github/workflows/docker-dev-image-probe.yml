@@ -31,5 +31,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: official-v2606-jammy-dev-probe
-          path: reports/official-jammy-dev-probe.txt
+          path: reports/official-jammy-*/
           if-no-files-found: warn

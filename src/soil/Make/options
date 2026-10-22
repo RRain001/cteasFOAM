@@ -1,5 +1,5 @@
-# fvCFD.H transitively includes cyclic AMI and mapped patch headers
-# from meshTools: finiteVolume alone is not sufficient for v2606.
+/* fvCFD.H transitively includes cyclic AMI and mapped patch headers
+ * from meshTools: finiteVolume alone is not sufficient for v2606. */
 EXE_INC = \
     -I$(LIB_SRC)/finiteVolume/lnInclude \
     -I$(LIB_SRC)/meshTools/lnInclude

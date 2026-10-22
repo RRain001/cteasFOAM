@@ -18,13 +18,13 @@ Both solvers are based on **OpenFOAM v2606 FVM libraries**, but have independent
 
 **Ubuntu 22.04 base image + official OpenCFD/Keysight v2606 APT packages.** Your Ubuntu 22.04 server needs no OS upgrade. `docker/Dockerfile.official-jammy` installs prebuilt OpenFOAM development packages, C++ and MPI; it does not compile upstream OpenFOAM source.
 
-From a Linux machine with Docker:
+From a native x86-64 Linux server with Docker Engine and Buildx:
 
 ```bash
 bash scripts/probe_official_jammy.sh
 ```
 
-The probe builds the image and attempts real `wmake` compilation of both **M0 placeholders**. See CI and `docs/docker-image-audit.md` for actual acceptance status. **Only the official-package Docker build is maintained.**
+The probe builds the image and attempts real `wmake` compilation of both **M0 placeholders**. Each run preserves logs and source fingerprints under `reports/official-jammy-*`. See `docs/docker-image-audit.md` for the acceptance boundary and `docker/README.md` for server setup. **Only the official-package Docker build is maintained.**
 
 ## Validation principles
 

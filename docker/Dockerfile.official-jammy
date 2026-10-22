@@ -1,7 +1,7 @@
 # Official-package OpenFOAM v2606 development image for cteasFOAM.
 # No third-party OpenFOAM image and no OpenFOAM source compilation.
-# Pin the Ubuntu base digest and APT package versions after CI proves this works.
-FROM ubuntu:22.04
+# Lock the official Ubuntu manifest and OpenFOAM package baseline explicitly.
+FROM ubuntu:22.04@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956
 
 ARG DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -15,16 +15,19 @@ RUN apt-get update \
 
 # OpenCFD / Keysight package repository (not the Foundation repository).
 # Import *only* the official repository key, and scope trust using signed-by.
+ARG OPENFOAM_PACKAGE_VERSION=2606.0~rc2-1
 RUN mkdir -p /etc/apt/keyrings \
  && curl --fail --show-error --silent --location \
        https://dl.openfoam.com/pubkey.gpg \
-       --output /etc/apt/keyrings/openfoam-com.gpg \
+    | gpg --dearmor --output /etc/apt/keyrings/openfoam-com.gpg \
+ && chmod 0644 /etc/apt/keyrings/openfoam-com.gpg \
  && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/openfoam-com.gpg] https://dl.openfoam.com/repos/deb jammy main" \
       > /etc/apt/sources.list.d/openfoam-com.list \
  && apt-get update \
  && apt-cache policy openfoam2606 openfoam2606-dev openfoam2606-default \
  && apt-get install -y --no-install-recommends \
-      openfoam2606-default openfoam2606-dev \
+      "openfoam2606-default=${OPENFOAM_PACKAGE_VERSION}" \
+      "openfoam2606-dev=${OPENFOAM_PACKAGE_VERSION}" \
  && rm -rf /var/lib/apt/lists/*
 
 # Environment is explicitly initialized by tests and runtime launcher scripts.
