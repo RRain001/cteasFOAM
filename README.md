@@ -16,7 +16,7 @@ Both solvers are based on **OpenFOAM v2606 FVM libraries**, but have independent
 
 ## Selected Docker development baseline
 
-**Ubuntu 22.04 base image + official OpenCFD/Keysight v2606 APT packages.** Your Ubuntu 22.04 server needs no OS upgrade. `docker/Dockerfile.official-jammy` installs prebuilt OpenFOAM development packages, C++ and MPI; it does not compile the upstream OpenFOAM source tree.
+**Ubuntu 22.04 base image + official OpenCFD/Keysight v2606 APT packages.** Your Ubuntu 22.04 server needs no OS upgrade. `docker/Dockerfile.official-jammy` installs prebuilt OpenFOAM development packages, C++ and MPI; it does not compile upstream OpenFOAM source.
 
 From a Linux machine with Docker:
 
@@ -24,8 +24,8 @@ From a Linux machine with Docker:
 bash scripts/probe_official_jammy.sh
 ```
 
-The probe builds the image and performs actual `wmake` compilation of both **M0 placeholders**. Follow CI and `docs/docker-image-audit.md` for acceptance evidence. Experimental alternate third-party images are not the selected primary base.
+The probe builds the image and attempts real `wmake` compilation of both **M0 placeholders**. See CI and `docs/docker-image-audit.md` for actual acceptance status. **Only the official-package Docker build is maintained.**
 
 ## Validation principles
 
-A compiling executable is **not** a validated solver. Future milestones require separate atmospheric, soil, and interface conservation tests, followed by observational validation. Only publish datasets/software where rights permit it.
+A compiling executable is **not** a validated solver. Future milestones require separate atmospheric, soil and interface conservation tests, followed by observational validation. Only publish datasets/software where rights permit it.

@@ -1,29 +1,24 @@
 #!/usr/bin/env bash
-# Runs *inside* a candidate OpenFOAM development container.
+# Runs inside the official-package OpenFOAM v2606 development container.
 set -eo pipefail
-echo "[cteasFOAM] image runtime check"
-if ! command -v wmake >/dev/null 2>&1; then
-  for setup in \
-    /usr/lib/openfoam/openfoam2606/etc/bashrc \
-    /opt/openfoam2606/etc/bashrc \
-    /opt/OpenFOAM/OpenFOAM-v2606/etc/bashrc \
-    /home/openfoam/OpenFOAM/OpenFOAM-v2606/etc/bashrc
-  do
-    if [[ -f "$setup" ]]; then
-      echo "Source $setup"
-      # OpenFOAM bashrc can return a nonzero status for optional shell setup
-      # even if it initialized the environment. Capture this explicitly.
-      set +e
-      source "$setup"
-      setup_rc=$?
-      set -e
-      echo "OpenFOAM bashrc return status: $setup_rc"
-      break
-    fi
-  done
+echo "[cteasFOAM] official v2606 development-image check"
+
+setup=/usr/lib/openfoam/openfoam2606/etc/bashrc
+if [[ ! -f "$setup" ]]; then
+  echo "FAIL: official OpenFOAM v2606 environment script absent: $setup"
+  exit 9
 fi
+
+# Explicitly tolerate an optional environment-shell return status while
+# separately verifying every build requirement below.
+set +e
+source "$setup"
+setup_rc=$?
+set -e
+echo "OpenFOAM setup status: $setup_rc"
+
 if ! command -v wmake >/dev/null 2>&1; then
-  echo "FAIL: wmake absent after standard OpenFOAM startup"
+  echo "FAIL: wmake absent"
   exit 10
 fi
 for tool in g++ mpirun; do
@@ -41,13 +36,11 @@ if [[ "${WM_PROJECT_VERSION:-}" != "v2606" && "${WM_PROJECT_VERSION:-}" != "2606
   echo "FAIL: not OpenFOAM v2606"
   exit 12
 fi
-if [[ -z "${LIB_SRC:-}" && -z "${FOAM_SRC:-}" ]]; then
-  echo "WARN: LIB_SRC/FOAM_SRC not defined; check wmake setup"
-fi
-if [[ ! -f "${FOAM_SRC:-/does-not-exist}/finiteVolume/lnInclude/fvCFD.H" && ! -f "${LIB_SRC:-/does-not-exist}/finiteVolume/lnInclude/fvCFD.H" ]]; then
-  echo "FAIL: fvCFD.H not found in installed finiteVolume headers"
+if [[ ! -f "${FOAM_SRC:-/absent}/finiteVolume/lnInclude/fvCFD.H" && ! -f "${LIB_SRC:-/absent}/finiteVolume/lnInclude/fvCFD.H" ]]; then
+  echo "FAIL: fvCFD.H is absent"
   exit 13
 fi
+
 export FOAM_USER_APPBIN=/tmp/cteasfoam-m0-bin
 mkdir -p "$FOAM_USER_APPBIN" /tmp/cteasfoam-m0-build
 for component in atmosphere soil; do
@@ -60,4 +53,4 @@ for component in atmosphere soil; do
 done
 "$FOAM_USER_APPBIN/cteasAtmosphereFoam"
 "$FOAM_USER_APPBIN/cteasSoilFoam"
-echo "PASS: OpenFOAM v2606 tools+headers+compiler+MPI+two placeholder builds"
+echo "PASS: official-package v2606 tools, headers, compiler, MPI and both placeholder builds"

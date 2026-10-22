@@ -1,4 +1,4 @@
-name: M0 OpenFOAM v2606 development image probe
+name: M0 official OpenFOAM v2606 development image
 on:
   pull_request:
     paths:
@@ -7,6 +7,9 @@ on:
       - 'tests/**'
       - 'scripts/**'
       - 'docker/**'
+      - 'docs/docker-image-audit.md'
+      - 'AGENTS.md'
+      - 'README.md'
   workflow_dispatch:
 
 permissions:
@@ -29,23 +32,4 @@ jobs:
         with:
           name: official-v2606-jammy-dev-probe
           path: reports/official-jammy-dev-probe.txt
-          if-no-files-found: warn
-
-  community-fallback:
-    name: Optional community-image comparison
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Compare upstream and community tags
-        shell: bash
-        run: bash scripts/probe_dev_images.sh
-      - name: Preserve fallback evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: community-v2606-dev-probe
-          path: reports/docker-image-probe.txt
           if-no-files-found: warn
