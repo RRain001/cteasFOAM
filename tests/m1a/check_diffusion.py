@@ -16,7 +16,7 @@ path = case / "2" / "c"
 if not path.is_file():
     raise SystemExit(f"FAIL: solver did not write final field {path}")
 content = path.read_text()
-m = re.search(r"internalField\\s+nonuniform\\s+List<scalar>\\s+(\\d+)\\s*\\((.*?)\\)\\s*;", content, re.S)
+m = re.search(r"internalField\s+nonuniform\s+List<scalar>\s+(\d+)\s*\((.*?)\)\s*;", content, re.S)
 if not m:
     raise SystemExit("FAIL: final c field is not a nonuniform scalar list")
 n = int(m.group(1))
