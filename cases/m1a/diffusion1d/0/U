@@ -1,0 +1,17 @@
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volVectorField;
+    location    "0";
+    object      U;
+}
+
+dimensions [0 1 -1 0 0 0 0];
+internalField uniform (0 0 0);
+boundaryField
+{
+    xMin { type fixedValue; value uniform (0 0 0); }
+    xMax { type fixedValue; value uniform (0 0 0); }
+    emptyPlanes { type empty; }
+}

@@ -1,10 +1,11 @@
-name: M0 official OpenFOAM v2606 development image
+name: OpenFOAM v2606 build and M1A scalar verification
 on:
   pull_request:
     paths:
       - '.github/workflows/docker-dev-image-probe.yml'
       - 'src/**'
       - 'tests/**'
+      - 'cases/**'
       - 'scripts/**'
       - 'docker/**'
       - 'docs/docker-image-audit.md'
@@ -23,9 +24,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Build package-based image and compile two solver stubs
+      - name: Build official-package image and compile both executables
         shell: bash
         run: bash scripts/probe_official_jammy.sh
+      - name: Run M1A closed-domain analytic diffusion regression
+        shell: bash
+        run: |
+          docker run --rm --platform linux/amd64 \
+            --mount "type=bind,src=$PWD,dst=/workspace,readonly" \
+            --entrypoint /bin/bash \
+            cteasfoam/official-v2606-dev:jammy-m0 \
+            -c 'bash /workspace/tests/m1a/run_diffusion_regression.sh'
       - name: Preserve build/compiler evidence
         if: always()
         uses: actions/upload-artifact@v4
