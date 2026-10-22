@@ -11,9 +11,13 @@ if ! command -v wmake >/dev/null 2>&1; then
   do
     if [[ -f "$setup" ]]; then
       echo "Source $setup"
-      # OpenFOAM env setup may inspect unset variables.
-      set +u
-      source "$setup" >/dev/null
+      # OpenFOAM bashrc can return a nonzero status for optional shell setup
+      # even if it initialized the environment. Capture this explicitly.
+      set +e
+      source "$setup"
+      setup_rc=$?
+      set -e
+      echo "OpenFOAM bashrc return status: $setup_rc"
       break
     fi
   done
