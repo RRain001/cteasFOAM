@@ -5,7 +5,7 @@ on:
       - '.github/workflows/docker-dev-image-probe.yml'
       - 'src/**'
       - 'tests/**'
-      - 'scripts/probe_dev_images.sh'
+      - 'scripts/**'
       - 'docker/**'
   workflow_dispatch:
 
@@ -13,20 +13,39 @@ permissions:
   contents: read
 
 jobs:
-  image-probe:
-    name: Pull and compile in v2606 image
-    runs-on: ubuntu-latest
+  official-jammy-dev:
+    name: Official OpenFOAM APT on Ubuntu 22.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build package-based image and compile two solver stubs
+        shell: bash
+        run: bash scripts/probe_official_jammy.sh
+      - name: Preserve build/compiler evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-v2606-jammy-dev-probe
+          path: reports/official-jammy-dev-probe.txt
+          if-no-files-found: warn
+
+  community-fallback:
+    name: Optional community-image comparison
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Probe official dev and third-party fallback
+      - name: Compare upstream and community tags
         shell: bash
         run: bash scripts/probe_dev_images.sh
-      - name: Save provenance and compiler evidence
+      - name: Preserve fallback evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: v2606-dev-image-probe
+          name: community-v2606-dev-probe
           path: reports/docker-image-probe.txt
           if-no-files-found: warn
