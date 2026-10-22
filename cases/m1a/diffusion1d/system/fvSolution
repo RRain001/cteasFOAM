@@ -11,8 +11,8 @@ solvers
 {
     c
     {
-        solver          PCG;
-        preconditioner  DIC;
+        solver          PBiCGStab;
+        preconditioner  DILU;
         tolerance       1e-13;
         relTol          0;
     }
