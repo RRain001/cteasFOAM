@@ -12,16 +12,20 @@ OpenFOAM v2606-based research software for coupled atmospheric and soil tritium 
 - `src/models/`: common physics, units and contracts.
 - `cases/`, `tests/`, `docker/`, `docs/`: reproducible demonstrations, verification, build and validation evidence.
 
-Both solvers will be based on **OpenFOAM v2606 libraries**, but have independent meshes, state and timesteps. A soil solver **is not** a separate from-scratch FVM library.
+Both solvers are based on **OpenFOAM v2606 FVM libraries**, but have independent meshes, state, and time steps. A soil solver is **not** a from-scratch FVM library.
 
-## Docker image selection
+## Selected Docker development baseline
 
-The official `opencfd/openfoam-run:2606` contains OpenFOAM runtime binaries/libraries **but explicitly omits source and build tools**. The official `opencfd/openfoam-dev` series is described as including sources and development tools. **Availability and contents of the exact `2606` tag require a live pull and compile test**. Do not infer that a tag exists from an image family overview.
+**Ubuntu 22.04 base image + official OpenCFD/Keysight v2606 APT packages.** Your Ubuntu 22.04 server needs no OS upgrade. `docker/Dockerfile.official-jammy` installs prebuilt OpenFOAM development packages, C++ and MPI; it does not compile upstream OpenFOAM source.
 
-The initial M0 PR includes a GitHub Actions probe that tests `opencfd/openfoam-dev:2606` first and independently probes `microfluidica/openfoam:2606` as a fallback. No homemade OpenFOAM source build is needed unless both development-image choices fail.
+From a native x86-64 Linux server with Docker Engine and Buildx:
 
-See `docs/architecture.md` and `docs/docker-image-audit.md` after M0 is merged.
+```bash
+bash scripts/probe_official_jammy.sh
+```
+
+The probe builds the image and attempts real `wmake` compilation of both **M0 placeholders**. Each run preserves logs and source fingerprints under `reports/official-jammy-*`. See `docs/docker-image-audit.md` for the acceptance boundary and `docker/README.md` for server setup. **Only the official-package Docker build is maintained.**
 
 ## Validation principles
 
-A compiling executable is **not** a validated solver. Future milestones require separate atmospheric, soil, and interface conservation tests, followed by observational validation. Only publish datasets/software where rights permit it.
+A compiling executable is **not** a validated solver. Future milestones require separate atmospheric, soil and interface conservation tests, followed by observational validation. Only publish datasets/software where rights permit it.

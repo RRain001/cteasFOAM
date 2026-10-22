@@ -1,0 +1,4 @@
+# The build installs packages only; no project files enter the image.
+**
+!docker/
+!docker/Dockerfile.official-jammy

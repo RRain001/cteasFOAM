@@ -1,0 +1,35 @@
+name: M0 official OpenFOAM v2606 development image
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/docker-dev-image-probe.yml'
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'docker/**'
+      - 'docs/docker-image-audit.md'
+      - 'AGENTS.md'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  official-jammy-dev:
+    name: Official OpenFOAM APT on Ubuntu 22.04
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build package-based image and compile two solver stubs
+        shell: bash
+        run: bash scripts/probe_official_jammy.sh
+      - name: Preserve build/compiler evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-v2606-jammy-dev-probe
+          path: reports/official-jammy-*/
+          if-no-files-found: warn
