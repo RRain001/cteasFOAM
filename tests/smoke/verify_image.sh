@@ -12,7 +12,6 @@ if [[ ! -f "$setup" ]]; then
   echo "FAIL: official OpenFOAM v2606 environment script absent: $setup"
   exit 9
 fi
-# Upstream setup is not nounset-safe and can return an optional-tool status.
 set +e
 source "$setup"
 setup_rc=$?
@@ -25,7 +24,6 @@ done
 echo "WM_PROJECT_VERSION=${WM_PROJECT_VERSION:-<unset>}"
 echo "WM_PROJECT_DIR=${WM_PROJECT_DIR:-<unset>}"
 echo "WM_OPTIONS=${WM_OPTIONS:-<unset>} WM_MPLIB=${WM_MPLIB:-<unset>}"
-# Invoke directly: command substitutions inside echo can hide tool failure.
 g++ --version
 mpirun --version
 mpicxx --showme
@@ -41,6 +39,7 @@ for header in finiteVolume/lnInclude/fvCFD.H meshTools/lnInclude/cyclicAMIPolyPa
 done
 
 build_dir=$(mktemp -d /tmp/cteasfoam-m0-XXXXXX)
+trap 'rm -rf "$build_dir"' EXIT
 export FOAM_USER_APPBIN="$build_dir/bin"
 mkdir -p "$FOAM_USER_APPBIN"
 for component in atmosphere soil; do
@@ -48,12 +47,9 @@ for component in atmosphere soil; do
   cp -a "/workspace/src/$component" "$build_dir/$component"
   (
     cd "$build_dir/$component"
-    # Ignore any copied build artefacts: this probe must compile from source.
     wclean
     compile_log="$build_dir/$component-wmake.txt"
     wmake 2>&1 | tee "$compile_log"
-    # wmake can return zero even when preprocessing Make/options reports an
-    # error. Reject diagnostics as well as the pipeline's nonzero exit code.
     if grep -E '(^|[[:space:]])(fatal )?error:|wmkdepend: could not open' "$compile_log"; then
       echo "FAIL: $component emitted build errors despite wmake exit status"
       exit 14
@@ -62,13 +58,14 @@ for component in atmosphere soil; do
 done
 for app in cteasAtmosphereFoam cteasSoilFoam; do
   ldd "$FOAM_USER_APPBIN/$app"
-  "$FOAM_USER_APPBIN/$app"
 done
+# The M1A atmosphere executable now REQUIRES a mesh/case; see tests/m1a.
+# Execute only the unchanged M0 soil stub without a case.
+"$FOAM_USER_APPBIN/cteasSoilFoam"
 
 echo "[cteasFOAM] independent MPI compiler/runtime smoke (two ranks)"
 mpicxx /workspace/tests/smoke/mpi_probe.C -o "$build_dir/mpi_probe"
-# The disposable test container runs as root, so scope OpenMPI consent here.
 OMPI_ALLOW_RUN_AS_ROOT=1 OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1 \
   timeout 60s mpirun --oversubscribe -np 2 "$build_dir/mpi_probe"
-echo "PASS: official-package v2606 tools, headers, two placeholder builds and MPI toolchain"
-echo "NOT_RUN: solver parallel numerics, PDE physics and coupling conservation (NOT IMPLEMENTED)"
+echo "PASS: v2606 toolchain; atmosphere compiled; soil placeholder ran; MPI smoke"
+echo "NOT_RUN: solver MPI, atmospheric URANS, HT/HTO, soil PDE and coupling"

@@ -1,6 +1,5 @@
 # Official-package OpenFOAM v2606 development image for cteasFOAM.
 # No third-party OpenFOAM image and no OpenFOAM source compilation.
-# Lock the official Ubuntu manifest and OpenFOAM package baseline explicitly.
 FROM ubuntu:22.04@sha256:0a9887931b0e38af2e3487ed39e29436b0535c4f3f52e57745baaf79d1898956
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -9,12 +8,13 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl gnupg \
-      build-essential cmake pkg-config \
+      build-essential cmake pkg-config python3 \
       openmpi-bin libopenmpi-dev \
  && rm -rf /var/lib/apt/lists/*
 
 # OpenCFD / Keysight package repository (not the Foundation repository).
-# Import *only* the official repository key, and scope trust using signed-by.
+# v2606 was formally released on 2026-06-26, but the official Jammy package
+# filename still includes "~rc2-1" as of 2026-10-23. Keep the TESTED version.
 ARG OPENFOAM_PACKAGE_VERSION=2606.0~rc2-1
 RUN mkdir -p /etc/apt/keyrings \
  && curl --fail --show-error --silent --location \
@@ -30,7 +30,5 @@ RUN mkdir -p /etc/apt/keyrings \
       "openfoam2606-dev=${OPENFOAM_PACKAGE_VERSION}" \
  && rm -rf /var/lib/apt/lists/*
 
-# Environment is explicitly initialized by tests and runtime launcher scripts.
-# Avoid a system-wide, implicitly-sourced bashrc.
 WORKDIR /workspace
 CMD ["/bin/bash"]
