@@ -59,4 +59,4 @@ docker run --rm --platform linux/amd64 \
   --mount "type=bind,src=$PWD,dst=/workspace,readonly" \
   --entrypoint /bin/bash "$image" \
   -c 'bash /workspace/tests/smoke/verify_failure_paths.sh'
-echo "SUCCESS: two M0 stub builds, MPI toolchain and failure regressions passed; physical solvers remain NOT IMPLEMENTED"
+echo "SUCCESS: M1A atmosphere compiled, M0 soil stub built, MPI and failure regressions passed; atmospheric transport physics requires separate analytic CI"
