@@ -322,6 +322,22 @@ int main(int argc, char* argv[])
                        << Foam::nl;
         }
 
+        // Optional equation-level audit for real nonuniform scalar inflow.
+        // Unlike the historical uniform c=1 closed-volume regression, this
+        // uses the *same implicit FVM operator* used to advance c, including
+        // its actual selected upwind boundary coefficients. c is
+        // dimensionless; its integrated content is measured in m3, NOT Bq.
+        const Foam::Switch auditPassiveScalarFlux
+        (
+            transportProperties.lookupOrDefault<Foam::Switch>
+            (
+                "auditPassiveScalarFlux", false
+            )
+        );
+        const Foam::scalar oldScalarInventory =
+            auditPassiveScalarFlux
+          ? Foam::fvc::domainIntegrate(c).value()
+          : 0.0;
         Foam::fvScalarMatrix cEqn
         (
             Foam::fvm::ddt(c)
@@ -329,6 +345,48 @@ int main(int argc, char* argv[])
           - Foam::fvm::laplacian(D, c)
         );
         cEqn.solve();
+
+        if (auditPassiveScalarFlux)
+        {
+            // fluxRequired(c) is explicitly enabled for this experiment.
+            // Matrix flux is oriented outward at boundary patches and
+            // includes the flux discretization actually solved by cEqn.
+            const Foam::surfaceScalarField cFaceFlux(cEqn.flux());
+            Foam::scalar cFluxNet = 0.0;
+            Foam::scalar cFluxXMin = 0.0;
+            Foam::scalar cFluxXMax = 0.0;
+            const Foam::label xMinPatch =
+                mesh.boundaryMesh().findPatchID("xMin");
+            const Foam::label xMaxPatch =
+                mesh.boundaryMesh().findPatchID("xMax");
+            if (xMinPatch < 0 || xMaxPatch < 0)
+            {
+                FatalErrorInFunction
+                    << "auditPassiveScalarFlux needs xMin/xMax patches"
+                    << exit(FatalError);
+            }
+            forAll(cFaceFlux.boundaryField(), patchI)
+            {
+                const Foam::scalar patchSum =
+                    Foam::sum(cFaceFlux.boundaryField()[patchI]);
+                cFluxNet += patchSum;
+                if (patchI == xMinPatch) cFluxXMin = patchSum;
+                if (patchI == xMaxPatch) cFluxXMax = patchSum;
+            }
+            Foam::reduce(cFluxNet, Foam::sumOp<Foam::scalar>());
+            Foam::reduce(cFluxXMin, Foam::sumOp<Foam::scalar>());
+            Foam::reduce(cFluxXMax, Foam::sumOp<Foam::scalar>());
+            const Foam::scalar newScalarInventory =
+                Foam::fvc::domainIntegrate(c).value();
+            const Foam::scalar cBudgetResidual =
+                newScalarInventory - oldScalarInventory
+              + runTime.deltaTValue()*cFluxNet;
+            Foam::Info << "CTEAS_M1A scalar_flux_xMin=" << cFluxXMin
+                       << " scalar_flux_xMax=" << cFluxXMax
+                       << " scalar_flux_net=" << cFluxNet
+                       << " scalar_budget_residual=" << cBudgetResidual
+                       << Foam::nl;
+        }
 
         Foam::Info << "CTEAS_M1A integral="
                    << Foam::fvc::domainIntegrate(c).value() << Foam::nl;
