@@ -542,3 +542,63 @@ Run `tests/m1b1/run_open_pressure_tracer_diffusion.sh` in the official
 v2606 Docker image. The original M1B-1g-6 runner and all managed smoke/full
 software gates remain separate and must not be assumed passing for a new
 SHA. **Independent scientific/field review remains NOT_RUN.**
+
+## M1B-1g-8: analytical positive diffusion on the nonorthogonal mesh (PRE-RUN)
+
+**The following physical experiment and numerical thresholds were specified before
+its first execution.** This is an analytical, not observational, reference.
+Use the same genuine 960-cell 3-D interior-warped unit cube, the official
+OpenFOAM v2606 solver and PISO configuration, corrected Gauss-linear
+Laplacian, 20 steps of 0.02 s, and viscosity nu=0.05 m2/s.
+Set both physical kinematic pressure boundaries to zero, U(x,0)=0,
+molecular diffusivity **D=0.01 m2/s**, and impose the exact affine
+steady Laplace solution **c(x,y,z,t)=1-x** at the actual native cell
+centres initially. Set fixedValue c=1 at xMin and c=0 at xMax;
+all four y/z walls have zeroGradient. The physical continuum solution
+has U=p=0, zero advective transport, diffusive outward face fluxes
+F_xMin=-0.01 m3/s and F_xMax=+0.01 m3/s, total scalar inventory
+M=0.5 m3 and zero net scalar flux at all times. The flux sign is
+outward-positive and c is **dimensionless**, not HT/HTO or Bq.
+
+A priori gates, all fail-closed:
+
+1. Generate a real native blockMesh and apply the existing
+   x'=x+0.04 sin(pi x)sin(pi y)sin(pi z) interior warp (665 moved
+   vertices); actual checkMesh must say Mesh OK, 960 cells, positive
+   volumes, total volume 1 within 1e-6, maximum nonorthogonality
+   between 1 and 65 degrees, skewness below 3.5. Obtain real
+   OpenFOAM writeCellCentres, not index-based approximations.
+2. The actual source and solved case must use D=0.01, c=1-x
+   at the 960 native initial centroids to L-infinity <=1e-12,
+   fixedValue end patches and insulating walls. Solver must perform
+   exactly 20 genuine PISO steps and 180 real pressure solves.
+3. Final **analytical scalar L-infinity error <=1e-5** and
+   cell-centre **RMS error <=1e-6**; final velocity and pressure
+   componentwise absolute maxima <=1e-8. The affine field is an
+   exact steady continuum solution even with nonorthogonal interior
+   mesh, so the test probes the actual corrected finite-volume
+   operator and physical boundary conditions, not only D sensitivity.
+4. At **every** step require each signed diffusive end flux within
+   2e-5 m3/s of its independently known +/-0.01 m3/s reference;
+   |F_net| <=2e-5 m3/s, |F_net-F_xMin-F_xMax| <=1e-6 m3/s;
+   |M-0.5| <=1e-5 m3; the logged scalar budget residual <=1e-7 m3
+   and the independently reconstructed time-discrete residual
+   |M_new-M_old+dt F_net| <=2e-6 m3. Zero-flow volume flux
+   <=1e-8 m3/s and corrected divergence <=1e-7 /s.
+5. Deliberately corrupt one *native final field* scalar value by
+   +0.05 and require the analytical checker to reject it for
+   wrong c(x). Existing M1B-1g-7 six-case diffusion-sensitivity,
+   upstream icoFoam, and exact-SHA smoke/full checks remain
+   separate and must not be claimed without new execution.
+
+This is a **manufactured steady affine continuum solution with
+physical Dirichlet/Neumann conditions**, not a generic transient
+Gaussian plume, an experimental measurement, a proof of order
+of accuracy, or independent human scientific acceptance.
+The project still has no validated atmospheric URANS, HT/HTO,
+soil PDE or air-soil coupling. The current Draft PR must not merge
+without its separate same-SHA non-bot independent science review.
+
+Runner: `bash tests/m1b1/run_warped_linear_diffusion.sh` in the
+pinned official v2606 Docker environment, with the repository
+mounted read-only at `/workspace`.
