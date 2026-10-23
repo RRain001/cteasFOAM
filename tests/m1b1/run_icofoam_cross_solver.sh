@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# M1B-1g-4: real native v2606 icoFoam vs cteasAtmosphereFoam.
+# M1B-1g-4/5: real native v2606 icoFoam vs cteasAtmosphereFoam, forward/reversed gradient.
 set -eo pipefail
 set +e
 source /usr/lib/openfoam/openfoam2606/etc/bashrc
@@ -27,7 +27,7 @@ if grep -E '(^|[[:space:]])(fatal )?error:|wmkdepend: could not open' "$work/bui
  echo "FAIL: hidden compiler failure"; exit 22;
 fi
 test -x "$FOAM_USER_APPBIN/cteasAtmosphereFoam" || exit 22
-for mode in warped zero; do
+for mode in warped zero reverse; do
  case_dir="$work/cteas-$mode"
  ref_dir="$work/ico-$mode"
  python3 /workspace/tests/m1b1/make_warped_open_pressure_case.py make "$case_dir" "$mode"
@@ -100,7 +100,9 @@ python3 /workspace/tests/m1b1/check_icofoam_cross_solver.py \
  "$work/cteas-warped" "$work/ico-warped" "$work/check.log" \
  "$work/cteas-warped-solve.log" "$work/ico-warped-solve.log" \
  "$work/cteas-zero" "$work/ico-zero" \
- "$work/cteas-zero-solve.log" "$work/ico-zero-solve.log"
+ "$work/cteas-zero-solve.log" "$work/ico-zero-solve.log" \
+ "$work/cteas-reverse" "$work/ico-reverse" \
+ "$work/cteas-reverse-solve.log" "$work/ico-reverse-solve.log"
 # Deliberately contaminate a reference final field and ensure the
 # evaluator flags the discrepancy, ruling out a silent same-file
 # comparison. The corrupted output is confined to the disposable case.
@@ -122,6 +124,8 @@ if python3 /workspace/tests/m1b1/check_icofoam_cross_solver.py \
  "$work/cteas-warped-solve.log" "$work/ico-warped-solve.log" \
  "$work/cteas-zero" "$work/ico-zero" \
  "$work/cteas-zero-solve.log" "$work/ico-zero-solve.log" \
+ "$work/cteas-reverse" "$work/ico-reverse" \
+ "$work/cteas-reverse-solve.log" "$work/ico-reverse-solve.log" \
  > "$work/injected-check.log" 2>&1; then
  echo "FAIL: corrupted official final velocity went undetected"
  exit 35
@@ -130,4 +134,4 @@ grep -q 'FAIL: official icoFoam and experimental solver diverge beyond predeclar
  cat "$work/injected-check.log"; echo "FAIL: wrong negative-check rejection"; exit 36;
 }
 echo "PASS: injected official upstream final U corruption rejected by independent comparison"
-echo "PASS: M1B-1g-4 real official v2606 upstream solver cross-reference"
+echo "PASS: M1B-1g-4/5 forward/reversed-pressure native v2606 cross-solver reference"

@@ -15,13 +15,13 @@ from check_warped_open_pressure import (
     audit, duct_velocity, read_field, audit_physical_points, quality,
 )
 
-if len(sys.argv) != 10:
-    raise SystemExit("usage: check_icofoam_cross_solver.py CT_CASE IC_CASE MESH_LOG CT_LOG IC_LOG CT_ZERO IC_ZERO CT_ZERO_LOG IC_ZERO_LOG")
-ct, official, meshlog, ctlog, icolog, zero_ct, zero_ic, zctlog, zicolog = sys.argv[1:]
+if len(sys.argv) != 14:
+    raise SystemExit("usage: check_icofoam_cross_solver.py CT_CASE IC_CASE MESH_LOG CT_LOG IC_LOG CT_ZERO IC_ZERO CT_ZERO_LOG IC_ZERO_LOG CT_REVERSE IC_REVERSE CT_REVERSE_LOG IC_REVERSE_LOG")
+ct, official, meshlog, ctlog, icolog, zero_ct, zero_ic, zctlog, zicolog, reverse_ct, reverse_ic, rctlog, ricolog = sys.argv[1:]
 quality(meshlog, True)
 assert audit_physical_points(ct, True) == 665
 
-for a, b in ((ct, official), (zero_ct, zero_ic)):
+for a, b in ((ct, official), (zero_ct, zero_ic), (reverse_ct, reverse_ic)):
     for relative in ("constant/polyMesh/points",
                      "constant/polyMesh/faces",
                      "constant/polyMesh/owner",
@@ -41,7 +41,7 @@ for a, b in ((ct, official), (zero_ct, zero_ic)):
     if "PISO" not in (Path(a)/"system/fvSolution").read_text():
         raise SystemExit("FAIL: no explicit reference PISO configuration")
 
-for label, ref_log in (("driven", icolog), ("zero", zicolog)):
+for label, ref_log in (("driven", icolog), ("zero", zicolog), ("reverse", ricolog)):
     text = Path(ref_log).read_text()
     steps = re.findall(r"(?m)^Time = ([0-9.]+)\s*$", text)
     pressure_solves = len(re.findall(r"Solving for p,", text))
@@ -55,8 +55,9 @@ for label, ref_log in (("driven", icolog), ("zero", zicolog)):
 
 # The existing independent pressure/flux/analytic checker audits the
 # CTEAS solver, including true signed inlet/outlet and zero-drive.
-audit(ct, meshlog, ctlog, "warped")
+forward_U, forward_Q = audit(ct, meshlog, ctlog, "warped")
 audit(zero_ct, meshlog, zctlog, "zero")
+reverse_U, reverse_Q = audit(reverse_ct, meshlog, rctlog, "reverse")
 
 C = read_field(ct,"0","C",True)
 U = read_field(ct,"0.4","U",True)
@@ -91,4 +92,32 @@ for name, candidate, reference in (("U",zero_ct,zero_ic),("p",zero_ct,zero_ic)):
     print(f"M1B-1g-4 zero_drive_{name}_CTEAS_Linf={max_a:.12g} "
           f"zero_drive_{name}_icoFoam_Linf={max_b:.12g}")
 
-print("PASS: physical-input-identical native v2606 upstream icoFoam pressure-duct cross-solver comparison")
+# Reverse the physical pressure drop without mirroring or changing the
+# warped mesh. This catches a wrong pressure-sign convention or hardcoded
+# positive-flow check. Because Navier-Stokes is nonlinear, odd symmetry is
+# an explicitly *bounded* regression, not an exact mathematical identity.
+reverse_ref_U = read_field(reverse_ic, "0.4", "U", True)
+reverse_ref_p = read_field(reverse_ic, "0.4", "p", False)
+reverse_p = read_field(reverse_ct, "0.4", "p", False)
+reverse_C = read_field(reverse_ct, "0", "C", True)
+r_u_error = max(abs(a-b) for u,v in zip(reverse_U,reverse_ref_U) for a,b in zip(u,v))
+r_p_error = max(abs(a-b) for a,b in zip(reverse_p,reverse_ref_p))
+r_rms = math.sqrt(math.fsum(sum((a-b)**2 for a,b in zip(u,v))
+                            for u,v in zip(reverse_U,reverse_ref_U))/len(reverse_U))
+r_analytic = max(abs(u[0]-duct_velocity(c[1],c[2],gradient=-0.1))
+                 for u,c in zip(reverse_ref_U,reverse_C))
+r_transverse = max(max(abs(v[1]),abs(v[2])) for v in reverse_ref_U)
+odd_U = max(abs(a+b) for f,r in zip(forward_U,reverse_U) for a,b in zip(f,r))
+odd_Q = max(abs(a+b) for a,b in zip(forward_Q,reverse_Q))
+print(f"M1B-1g-5 reverse cross_solver_U_Linf={r_u_error:.12g} "
+      f"cross_solver_U_RMS={r_rms:.12g} absolute_p_Linf={r_p_error:.12g} "
+      f"icoFoam_reverse_stokes_U_Linf={r_analytic:.12g} "
+      f"icoFoam_reverse_transverse_U_Linf={r_transverse:.12g} "
+      f"forward_reverse_U_odd_residual={odd_U:.12g} "
+      f"forward_reverse_Q_odd_residual={odd_Q:.12g}")
+if (r_u_error > .007 or r_p_error > .007 or r_rms > .003 or
+        r_analytic > .025 or r_transverse > .02 or
+        odd_U > .01 or odd_Q > .003):
+    raise SystemExit("FAIL: reversed-pressure upstream parity or signed-flux regression")
+
+print("PASS: physical-input-identical native v2606 upstream icoFoam forward/zero/reverse cross-solver comparison")

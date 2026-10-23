@@ -99,3 +99,19 @@ external third-party numerical or field data are not embedded.
   decision cannot be inferred from an automated passing test.
 
 This review checklist contains no reviewer signature or endorsement.
+
+## Reversed-gradient reproducibility addendum (M1B-1g-5)
+
+The same exact-head reviewer execution of
+`tests/m1b1/run_icofoam_cross_solver.sh` additionally requires
+a negative kinematic inlet pressure of -0.1 m²/s² with zero at xMax
+on the unchanged 960-cell warped duct. Confirm actual reverse-signed
+inlet/outlet flow, uniform passive-scalar budget, 180 real native
+pressure solves, signed Stokes reference, full-field U/absolute p
+cross-solver parity, and the forward/reverse bounded low-Re residuals.
+Observe that both the custom and official implementations still share
+the OpenFOAM finite-volume infrastructure; this is not independent
+external validation. The predeclared numerical bounds and caveats are
+in `docs/m1b-1g-warped-open-pressure-acceptance.md`.
+The need for an actual independent non-bot review, a separate
+`science-validated` judgement, and Draft status remains unchanged.

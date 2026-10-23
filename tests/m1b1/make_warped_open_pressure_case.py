@@ -26,11 +26,11 @@ def write(case, directory, name, cls, body):
 
 
 def make(case, mode):
-    if mode not in ("flat", "warped", "zero"):
-        raise SystemExit("FAIL: expected flat, warped or zero")
+    if mode not in ("flat", "warped", "zero", "reverse"):
+        raise SystemExit("FAIL: expected flat, warped, zero or reverse")
     for dirname in ("0", "constant", "system"):
         (case / dirname).mkdir(parents=True, exist_ok=True)
-    dp = 0.0 if mode == "zero" else 0.1
+    dp = 0.0 if mode == "zero" else (-0.1 if mode == "reverse" else 0.1)
     write(case, "system", "blockMeshDict", "dictionary", f"""
 scale 1;
 vertices
@@ -166,7 +166,7 @@ def seed(case, mode):
         raise SystemExit("FAIL: incomplete/nonfinite native centres")
     if mode == "warped" and max(abs(x - ((i % NX)+.5)/NX) for i, (x,y,z) in enumerate(coords)) < .01:
         raise SystemExit("FAIL: warped mesh centres not physically displaced")
-    dp = 0.0 if mode == "zero" else .1
+    dp = 0.0 if mode == "zero" else (-.1 if mode == "reverse" else .1)
     vals = [dp*(1-x) for x, y, z in coords]
     path = case / "0" / "p"
     txt = path.read_text()
@@ -180,7 +180,7 @@ def seed(case, mode):
 
 
 if len(sys.argv) not in (4, 5):
-    raise SystemExit("usage: make_warped_open_pressure_case.py make|warp|seed CASE flat|warped|zero [NXxNYxNZ]")
+    raise SystemExit("usage: make_warped_open_pressure_case.py make|warp|seed CASE flat|warped|zero|reverse [NXxNYxNZ]")
 action, directory, mode = sys.argv[1:4]
 if len(sys.argv) == 5:
     match = re.fullmatch(r"([1-9][0-9]*)x([1-9][0-9]*)x([1-9][0-9]*)", sys.argv[4])
@@ -192,7 +192,7 @@ if len(sys.argv) == 5:
 target = Path(directory)
 if action == "make":
     make(target, mode)
-elif action == "warp" and mode in ("warped", "zero"):
+elif action == "warp" and mode in ("warped", "zero", "reverse"):
     warp(target)
 elif action == "seed":
     seed(target, mode)

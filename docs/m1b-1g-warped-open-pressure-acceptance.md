@@ -379,3 +379,48 @@ does **not** establish an independent discretization or
 experimental/real-atmosphere validation; shared OpenFOAM
 libraries, algorithms and conditions mean the two outputs
 are not independent physical observations.
+
+## M1B-1g-5: reversed fixed-pressure gradient sign/flow validation (pre-run gate)
+
+The same official v2606 `run_icofoam_cross_solver.sh` now executes a
+third, *reverse* run alongside the already accepted `warped` and `zero`
+modes. Before observing numerical results, this increment declares:
+
+- Identical real 960-cell warped polyMesh, true native cell centres,
+  four no-slip walls, `nu=0.05`, `D=0`, initial velocity zero and
+  uniform dimensionless `c=1`. Only kinematic pressure reverses from
+  `p(xMin)=+0.1, p(xMax)=0` to `p(xMin)=-0.1, p(xMax)=0`
+  (m²/s²). Initialise `p=-0.1(1-x)` at *native* cell centres.
+- Execute both the experimental CTEAS solver and unmodified official
+  `icoFoam` with byte-equal input files within each mode; require
+  20 genuine transient steps, 180 actual pressure matrix solves, real
+  output U/p, correct fixed pressure and zero wall velocity. The
+  checker requires reverse `q_in>+0.003` and
+  `q_out<-0.003 m³/s` (signs reversed relative to forward),
+  full 20-step corrected-flux budgets with
+  `max|div(phi)| <=1e-7 /s`, net/boundary-pair flux
+  `<=1e-7 m³/s` and uniform-scalar inventory drift
+  `<=1e-8 m³`. The same independent signed Stokes
+  series applies with pressure-gradient parameter `G=-0.1 m/s²`.
+- Reversed CTEAS vs official `icoFoam`: physical full-field
+  U L∞ `<=0.007 m/s`, U RMS `<=0.003 m/s`,
+  **absolute** fixed-gauge p L∞ `<=0.007 m²/s²`;
+  upstream analytic signed-axial-U L∞ `<=0.025 m/s`,
+  transverse U L∞ `<=0.02 m/s`.
+- The forward/reverse *candidate solver* is required to have
+  `max|U_forward+U_reverse| <=0.01 m/s` at identical
+  physical centres and max of the two final signed inlet/outlet
+  summed flow residuals `<=0.003 m³/s`. This is a
+  **bounded low-Re sign-symmetry test**, not exact odd symmetry:
+  nonlinear inertial terms and end effects prevent an exact Stokes
+  superposition assertion. These bounds are fixed before this
+  increment's first Docker run, not tuned to its observed outcomes.
+- Existing positive-drive, no-drive and deliberate +0.02 m/s corrupted
+  official-output negative test must remain passing; future external
+  scientific or independent human review remains NOT_RUN.
+
+This is a stronger negative-pressure boundary and flux-sign regression on a
+mild warped canonical duct. It does not validate atmospheric inflow/outflow
+with pressure-turbulence coupling, building walls, URANS, HT/HTO, soil or
+any air–soil activity exchange. The scalar boundary condition remains
+uniform-one so reverse advection is not a tracer inflow pulse test.

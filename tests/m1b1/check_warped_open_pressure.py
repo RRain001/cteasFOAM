@@ -143,7 +143,7 @@ def audit(case, meshlog, solverlog, mode):
         raise SystemExit("FAIL: not 20 real PDE steps × 3 PISO × 3 nonorth pressure solves")
     if not all(math.isfinite(a) for row in pressure+budget for a in row):
         raise SystemExit("FAIL: nonfinite pressure-flow or continuity log")
-    dp = 0 if mode == "zero" else .1
+    dp = 0 if mode == "zero" else (-.1 if mode == "reverse" else .1)
     pressuretext = (Path(case)/"0.4"/"p").read_text()
     for name, expected in (("xMin", dp), ("xMax", 0)):
         pat = rf"\b{name}\s*\{{\s*type\s+fixedValue;\s*value\s+uniform\s+([-+0-9.eE]+)\s*;"
@@ -181,8 +181,8 @@ def audit(case, meshlog, solverlog, mode):
     if maxdiv > 1e-7 or maxnet > 1e-7 or flux_error > 1e-7 or scalar_drift > 1e-8:
         raise SystemExit("FAIL: actual 3D pressure-corrected conservative flux/scalar")
     if dp:
-        if not inq < -.003 or not outq > .003:
-            raise SystemExit("FAIL: physical fixed-pressure boundary did not drive signed flow")
+        if (dp > 0 and not (inq < -.003 and outq > .003)) or (dp < 0 and not (inq > .003 and outq < -.003)):
+            raise SystemExit("FAIL: fixed-pressure gradient did not produce correctly signed throughflow")
         if axialerror > .025 or xpressure > .03 or transverse > .02:
             raise SystemExit("FAIL: actual 3D transient laminar duct analytical agreement")
     elif (max(abs(v) for u in U for v in u) > 1e-8 or
