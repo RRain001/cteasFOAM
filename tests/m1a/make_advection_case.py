@@ -29,9 +29,9 @@ blocks (hex (0 1 2 3 4 5 6 7) ({n} 1 1) simpleGrading (1 1 1));
 edges ();
 boundary
 (
-    xMin {{ type cyclic; neighbourPatch xMax; transform translational;
+    xMin {{ type cyclic; neighbourPatch xMax; transform translational; separationVector (1 0 0);
            faces ((0 4 7 3)); }}
-    xMax {{ type cyclic; neighbourPatch xMin; transform translational;
+    xMax {{ type cyclic; neighbourPatch xMin; transform translational; separationVector (-1 0 0);
            faces ((1 2 6 5)); }}
     emptyPlanes {{ type empty;
                    faces ((0 1 5 4) (3 7 6 2) (0 3 2 1) (4 5 6 7)); }}
