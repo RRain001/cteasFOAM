@@ -624,3 +624,53 @@ gradient reconstruction, not a post hoc relaxation of error
 limits or proof that the baseline Gauss-linear scheme passed.
 Both configurations and their separate source SHAs must remain
 visible in the acceptance record.
+
+## M1B-1g-9: non-affine transient Neumann diffusion (PRE-RUN)
+
+**All numerical gates in this section are fixed before the first M1B-1g-9 solver run.**
+The prior affine test can exactly reproduce a linear function; this separate
+test exercises curvature, transient decay, zero diffusive wall flux and
+spatial refinement. No new solver physics or artificial source is introduced.
+
+Continuum reference on the unit cube with zero fluid velocity and insulating
+all six faces: `c(x,y,z,t)=0.5+0.25 exp(-0.01 pi^2 t) cos(pi x)`,
+`D=0.01 m2/s`, `p=0`, `nu=0.05 m2/s`. Native cell-centre
+initialization uses `c(x,0)=0.5+0.25 cos(pi x)`; no face imposes
+the exact solution after initialization. This is the exact eigenmode of
+the 3-D heat equation with homogeneous Neumann conditions, not a
+manufactured affine steady state. The scalar is dimensionless.
+
+1. Official OpenCFD v2606 Docker must generate both 8x20x6 (960)
+   and 12x30x9 (3240) genuine blockMesh meshes, deform **only**
+   interior vertices with the existing amplitude-0.04 x-warp,
+   and pass real `checkMesh -allGeometry -allTopology` with positive
+   volume, total volume 1±1e-6, nonorthogonality in (1,65) degrees,
+   skewness <3.5. Real OpenFOAM cell centres must be used; the
+   geometry and 6 insulating patches are independently audited.
+2. Each case uses the same D, dt=0.02 s, final time 0.4 s,
+   leastSquares gradient, corrected Gauss-linear Laplacian,
+   20 real steps, 180 real pressure solves, and actual finite-volume
+   scalar flux/budget diagnostics. Require no flow/pressure:
+   max |U|, |p|, physical volume flux <=1e-8.
+3. Require each final cellwise error against the continuum eigenmode
+   L-infinity <=0.004, RMS <=0.002; the fine-grid RMS must be
+   <=0.85 times the coarse-grid RMS (both strictly positive).
+   These are **coarse-grid bounds**, not a measured formal order.
+   The initial scalar must match its analytic native-centre values
+   within 1e-12 and stay within [0.24,0.76] throughout the final
+   field. The initial volume inventory must be within 0.01 of 0.5.
+4. All boundary scalar fluxes must be zero: signed total and
+   each end flux <=1e-8 m3/s each step, and the independently
+   recomputed discrete mass budget
+   |M_new-M_old+dt F_boundary| <=2e-6 m3, logged residual
+   <=1e-7 m3, and cumulative inventory drift <=1e-6 m3.
+   Require actual output for all 20 steps and finite logs.
+5. A deliberate +0.05 corruption of a real final scalar cell
+   must make the independent checker fail. Prior affine, positive-D,
+   upstream icoFoam and exact-SHA smoke/full remain distinct gates.
+
+This verifies only a zero-flow dimensionless passive scalar on
+a canonical warped grid. It does not establish general transient
+atmospheric transport, HT/HTO activity conservation, URANS,
+air-soil coupling or independent human science approval.
+Runner: `tests/m1b1/run_warped_cosine_diffusion.sh`.
