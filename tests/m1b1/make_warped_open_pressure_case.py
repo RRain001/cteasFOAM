@@ -179,9 +179,16 @@ def seed(case, mode):
     print(f"M1B-1g seeded p(x) from actual OpenFOAM C cells={len(vals)} mode={mode}")
 
 
-if len(sys.argv) != 4:
-    raise SystemExit("usage: make_warped_open_pressure_case.py make|warp|seed CASE flat|warped|zero")
-action, directory, mode = sys.argv[1:]
+if len(sys.argv) not in (4, 5):
+    raise SystemExit("usage: make_warped_open_pressure_case.py make|warp|seed CASE flat|warped|zero [NXxNYxNZ]")
+action, directory, mode = sys.argv[1:4]
+if len(sys.argv) == 5:
+    match = re.fullmatch(r"([1-9][0-9]*)x([1-9][0-9]*)x([1-9][0-9]*)", sys.argv[4])
+    if not match:
+        raise SystemExit("FAIL: invalid three-dimensional resolution specification")
+    NX, NY, NZ = map(int, match.groups())
+    if min(NX, NY, NZ) < 6 or max(NX, NY, NZ) > 80:
+        raise SystemExit("FAIL: resolution is outside bounded canonical mesh range")
 target = Path(directory)
 if action == "make":
     make(target, mode)

@@ -203,3 +203,98 @@ mesh can expose spatial, boundary-condition or pressure-iteration
 biases. The physical pressure differences between refinements also
 did not follow an imposed convergence ratio. A mesh-refinement
 study and independent external review remain distinct requirements.
+
+## M1B-1g-3: three-level *spatial* mesh refinement (predeclared gate)
+
+This increment keeps the existing laminar OpenFOAM v2606 solver,
+physical unit cube, fixed kinematic pressure 0.1 → 0 m²/s², 4 no-slip
+walls, ν=0.05 m²/s, D=0 and initial U=0/c=1 unchanged.
+It uses identical **physical** x-only interior deformation
+x'=x+0.04 sin(πx)sin(πy)sin(πz) at three actual native hexahedral
+finite-volume resolutions: **8×20×6 (960), 12×30×9 (3240),
+16×40×12 (7680)**. Boundary patches are physically unchanged.
+The new optional positional grid argument is limited to the existing
+case generator's make/warp/seed actions; omitting it retains the original
+8×20×6 regression behavior.
+
+The temporal method is held constant: Δt=0.01 s, final time 0.4 s,
+40 full time steps and 360 real p matrix solves per grid. Each
+mesh is independently regenerated via v2606 `blockMesh`, genuinely
+warped in its `polyMesh/points`, checked with `checkMesh`,
+and seeded from OpenFOAM's actual `writeCellCentres`, rather than
+reusing the coarse mesh or index-based centroids.
+
+**Acceptance rules fixed before running the new cases:**
+- Each mesh is physically matched point-by-point (order-independent)
+  to the known deformed coordinate lattice, including unchanged
+  physical exterior vertices; no fake mesh or cached final field.
+- `checkMesh` returns Mesh OK, >1° and <65° maximum nonorthogonality,
+  <3.5 skew, positive minimum cell volume and total unit volume
+  within 1e-6. Every native field has exactly N cells.
+- Every grid actually completes 40 PISO steps, 360 p solves,
+  signed inlet/outlet fluxes, cellwise divergence and scalar budgets;
+  preserved inlet/outlet pressure and all four no-slip walls,
+  finite numerical output and exactly prescribed initial U/p/c.
+- Each grid must have max |div(phi)|, net boundary and inlet/outlet
+  imbalance ≤1e-7 in their respective units, scalar inventory/c drift
+  ≤1e-8, negative inlet flow <−0.003 m³/s, positive outlet
+  flow >0.003 m³/s; independent Stokes U L∞ ≤0.025 m/s,
+  linear pressure L∞ ≤0.03 m²/s² and transverse U L∞ ≤0.02 m/s.
+- Compute **RMS axial-velocity error** against the independently
+  implemented transient square-duct Stokes series at each native
+  cell centre, `sqrt(sum_i (Ux_i-u_exact(y_i,z_i,t))²/N)`.
+  This is an unweighted cell-centre RMS on each logically uniform
+  hexahedral mesh, not a volume-weighted/interpolated cross-mesh
+  difference. Each finer resolution must reduce this RMS by at
+  least **10%** (ratio <0.9), and finest/coarsest ≤**0.7**.
+  Also report axial U L∞, signed outlet flow, pressure L∞,
+  mesh-quality and conservation metrics; no unsupported theoretical
+  second-order claim follows from this limited three-grid study.
+
+This measures agreement with an analytic unidirectional Stokes
+reference for a **finite-length nonlinear incompressible
+Navier–Stokes** calculation with fixed static pressure boundaries.
+There can be legitimate pressure-end and convection differences,
+and changing cell-centre sample points alters the error norm.
+Thus an internal grid-error decrease is evidence of a controlled
+numerical refinement trend, **not a formal GCI estimate, measured
+order of accuracy, a continuum error bound or external
+scientific field validation**. A separate dt convergence result is
+documented above. A genuinely independent science review is
+still mandatory for PR merge.
+
+Runner: `bash tests/m1b1/run_warped_open_pressure_spatial.sh`
+from a read-only repository mount inside the official v2606
+Ubuntu Docker image. The checker is new and cannot waive
+existing serial/MPI and temporal regression gates.
+
+### M1B-1g-3 observed initial spatial result (scope: candidate only)
+
+Official v2606 Docker on Ubuntu, `Δt=0.01`, at `t=0.4`;
+**960/3240/7680** real cells, 40 time steps and 360 pressure
+matrix solves *per case*, yielded exact native-centroid RMS axial U
+errors **1.59829213498e-3, 8.73701386129e-4,
+5.10954721773e-4 m/s**. Ratios were **0.546646865745** and
+**0.584816196798**; finest/coarsest **0.319687941017**.
+All passed the separately written ≤0.9 adjacent and ≤0.7 overall
+criteria. Axial U L∞ errors were **0.00355757579,
+0.00218359681 and 0.00134930797 m/s**, also decreasing.
+
+Real OpenFOAM mesh nonorthogonality: **6.64834°, 7.03556°,
+7.03097°**. Finest grid max |div(phi)| **2.69e-13 /s**,
+scalar inventory drift zero to printed precision, 0.4 s
+final signed outlet flows **0.02655447, 0.02572988,
+0.02538801 m³/s**, respectively. Since outlet flow varies with
+resolution, this is not an assertion of a known continuum discharge
+or a formally measured convergence order.
+
+During initial *precommit* testing, the new independent point-set
+auditor rejected real mesh geometry because raw floating-point
+lexicographic sorting can reorder x-tied symmetric (y,z) lattice
+vertices. The geometry check was corrected to compare unordered
+multisets of coordinates rounded to 9 decimal places (≤5e-10 m
+quantization per coordinate), without modifying solver, physical
+mesh, scientific convergence or conservation gates. Subsequent
+three-resolution Docker run returned **PASS, exit 0**. This
+failure and checker correction are retained to avoid implying
+first-attempt numerical acceptance.
