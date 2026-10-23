@@ -2,15 +2,18 @@
 
 OpenFOAM v2606-based research software for coupled atmospheric and soil tritium transport.
 
-**M0 infrastructure: independently verified and merged. M1A: prescribed-flow
-passive scalar is under development; atmospheric URANS, HT/HTO, soil physics
-and coupling have NOT passed validation.**
+**M0 infrastructure and staged M1A prescribed-flow scalar regressions have
+passed their scoped gates. M1B-1f laminar pressure–velocity canonical tests
+through three-dimensional warped ABC meshes have passed exact-HEAD v2606 CI.
+M1B-1g distorted three-dimensional nonperiodic fixed-pressure duct is an
+experimental acceptance candidate. Validated atmospheric URANS, HT/HTO,
+soil physics and air–soil coupling are NOT IMPLEMENTED / NOT VALIDATED.**
 
 ## Intended architecture
 
-- `src/atmosphere/`: OpenFOAM transient atmospheric URANS + HT/HTO solver.
-  M1A first increment solves a dimensionless passive scalar with prescribed U;
-  it is **not yet URANS or tritium transport**.
+- `src/atmosphere/`: OpenFOAM executable with prescribed-U passive scalar,
+  special Couette and experimentally pressure-corrected **laminar** momentum
+  modes. URANS closure and HT/HTO activity PDEs are **future milestones**.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
