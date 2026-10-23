@@ -67,6 +67,7 @@ divSchemes
 laplacianSchemes { default Gauss linear corrected; }
 interpolationSchemes { default linear; }
 snGradSchemes { default corrected; }
+fluxRequired { default no; p; }
 """)
 write("system","fvSolution","dictionary","""
 solvers
