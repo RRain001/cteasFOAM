@@ -85,3 +85,48 @@ bash tests/m1b1/run_warped_open_pressure.sh from /workspace mount.
 This experimental runner is not an existing GitHub required check;
 do not report GitHub Actions success as covering this new test unless
 the workflow is explicitly extended and verified.
+
+## M1B-1g-1: two-rank x/z MPI on the *same* warped open-pressure duct
+
+This additional candidate extends M1B-1g without changing the solver, the
+v2606 package, or any earlier acceptance tolerance. It specifically verifies
+a **physical fixed-pressure Dirichlet gauge** together with a non-orthogonal
+interior mesh and two orientations of processor boundaries. The original
+M1B-1g serial flat/warped/zero suite remains a separate required test.
+
+Run `bash tests/m1b1/run_warped_open_pressure_mpi.sh` in the official
+v2606 Python-enabled Docker image. The executable is compiled from the
+candidate source. Native blockMesh, checkMesh, writeCellCentres,
+decomposePar, two-rank mpirun and reconstructPar are executed, not mocked.
+
+Cases and immutable physical inputs:
+
+- Serial warped pressure-driven duct, x-split two-rank, z-split two-rank;
+  960 cells, identical polyMesh/points, native C and initial U/p/c.
+- Two-rank z-split warped **zero-pressure-drop** negative control. Its
+  geometry, initial U and c match the driven cases; its p is *intentionally*
+  zero and must NOT match their linearly seeded initial pressure.
+- Each requires 20 completed timesteps, 3 PISO correctors, 2 additional
+  non-orthogonal correctors, i.e. 180 actual pressure matrix solves.
+  Pressure patches remain xMin=0.1 and xMax=0 m²/s² for driven cases.
+
+Predeclared MPI equivalence gates: all existing M1B-1g independent
+transient square-duct Stokes, checkMesh, signs of q_in/q_out, no-slip,
+zero-drive, continuity <=1e-7 /s, total boundary flux <=1e-7 m³/s,
+and scalar inventory drift <=1e-8 m³ checks apply to **each**
+reconstructed case. In addition, both MPI decompositions relative to
+the serial reference must satisfy cell-wise U L∞ <=0.005 m/s,
+**absolute** pressure L∞ <=0.01 m²/s² (the pressure is fixed-value,
+so gauge subtraction would hide a real error), scalar c L∞ <=1e-7,
+max inlet/outlet flow history discrepancy <=0.001 m³/s, relative
+final signed flow difference <=5%, kinetic energy difference <=0.003
+m5/s2. x/z orientations also require U L∞ <=0.005 m/s and
+absolute p L∞ <=0.01 m²/s². These limits are bounded engineering
+regressions, not proven asymptotic convergence. OpenFOAM reconstruction
+must supply real final U/p/c on the original physical mesh.
+
+Official GitHub CI currently exercises the earlier M1B-1f gate but **not**
+this new runner; a successful existing PR check or local Docker scoped full
+must not be relabeled as M1B-1g-1 scientific approval. No external
+experimental observation, turbulence, real atmospheric boundaries,
+HT/HTO or air–soil coupling is validated by the canonical duct.

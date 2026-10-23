@@ -191,15 +191,16 @@ def audit(case, meshlog, solverlog, mode):
     return U, pressure[-1]
 
 
-if len(sys.argv) != 10:
-    raise SystemExit("usage: check_warped_open_pressure.py FLAT_CASE FLAT_CHECK FLAT_SOLVE "
-                     "WARP_CASE WARP_CHECK WARP_SOLVE ZERO_CASE ZERO_CHECK ZERO_SOLVE")
-flat, fq = audit(*sys.argv[1:4], "flat")
-warped, wq = audit(*sys.argv[4:7], "warped")
-audit(*sys.argv[7:10], "zero")
-diff = max(abs(a-b) for f,w in zip(flat,warped) for a,b in zip(f,w))
-flow_rel = abs(fq[1]-wq[1])/max(abs(fq[1]),1e-12)
-print(f"M1B-1g flat_warp_U_Linf={diff:.12g} outlet_Q_relative_change={flow_rel:.12g}")
-if diff > .02 or flow_rel > .2:
-    raise SystemExit("FAIL: interior mesh warp changed physically identical duct flow too much")
-print("PASS: true 3D nonperiodic fixed-pressure/4-wall duct, warped mesh, analytical transient Stokes, zero-drive control")
+if __name__ == "__main__":
+    if len(sys.argv) != 10:
+        raise SystemExit("usage: check_warped_open_pressure.py FLAT_CASE FLAT_CHECK FLAT_SOLVE "
+                         "WARP_CASE WARP_CHECK WARP_SOLVE ZERO_CASE ZERO_CHECK ZERO_SOLVE")
+    flat, fq = audit(*sys.argv[1:4], "flat")
+    warped, wq = audit(*sys.argv[4:7], "warped")
+    audit(*sys.argv[7:10], "zero")
+    diff = max(abs(a-b) for f,w in zip(flat,warped) for a,b in zip(f,w))
+    flow_rel = abs(fq[1]-wq[1])/max(abs(fq[1]),1e-12)
+    print(f"M1B-1g flat_warp_U_Linf={diff:.12g} outlet_Q_relative_change={flow_rel:.12g}")
+    if diff > .02 or flow_rel > .2:
+        raise SystemExit("FAIL: interior mesh warp changed physically identical duct flow too much")
+    print("PASS: true 3D nonperiodic fixed-pressure/4-wall duct, warped mesh, analytical transient Stokes, zero-drive control")
