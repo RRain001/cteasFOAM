@@ -83,6 +83,14 @@ jobs:
             --entrypoint /bin/bash \
             cteasfoam/official-v2606-dev:jammy-m0 \
             -c 'bash /workspace/tests/m1b1/run_poiseuille_regression.sh'
+      - name: Run M1B-1d genuine 3D ABC Beltrami nonlinear analytic regression
+        shell: bash
+        run: |
+          docker run --rm --platform linux/amd64 \
+            --mount "type=bind,src=$PWD,dst=/workspace,readonly" \
+            --entrypoint /bin/bash \
+            cteasfoam/official-v2606-dev:jammy-m0 \
+            -c 'bash /workspace/tests/m1b1/run_abc_regression.sh'
       - name: Preserve build/compiler evidence
         if: always()
         uses: actions/upload-artifact@v4
