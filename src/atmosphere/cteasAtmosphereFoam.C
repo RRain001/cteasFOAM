@@ -4,6 +4,9 @@
  * No validated arbitrary 3D flow, URANS, HT/HTO, soil or interface yet.
  */
 #include "fvCFD.H"
+#include "constrainHbyA.H"
+#include "adjustPhi.H"
+#include "constrainPressure.H"
 
 int main(int argc, char* argv[])
 {
@@ -168,13 +171,27 @@ int main(int argc, char* argv[])
             Foam::solve(UEqn == -Foam::fvc::grad(p) + drivingAcceleration);
 
             Foam::volScalarField rAU("rAU", 1.0/UEqn.A());
-            Foam::volVectorField HbyA("HbyA", rAU*UEqn.H());
+            // Retain explicit body-force acceleration in the corrected
+            // momentum source as well as in the predictor equation.
+            // Without this term PISO projection silently drops the drive.
+            Foam::volVectorField HbyA
+            (
+                "HbyA",
+                Foam::constrainHbyA
+                (
+                    rAU*(UEqn.H() + drivingAcceleration), U, p
+                )
+            );
             Foam::surfaceScalarField phiHbyA
             (
                 "phiHbyA",
                 Foam::fvc::flux(HbyA)
               + Foam::fvc::interpolate(rAU)*Foam::fvc::ddtCorr(U, phi)
             );
+            // Standard pressure/flux boundary consistency for fixed-U
+            // no-slip walls; invisible in the original fully cyclic TGV.
+            Foam::adjustPhi(phiHbyA, U, p);
+            Foam::constrainPressure(p, U, phiHbyA, rAU);
             Foam::fvScalarMatrix pEqn
             (
                 Foam::fvm::laplacian(Foam::fvc::interpolate(rAU), p)
