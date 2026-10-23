@@ -160,8 +160,15 @@ int main(int argc, char* argv[])
                 Foam::fvm::laplacian(Foam::fvc::interpolate(rAU), p)
              == Foam::fvc::div(phiHbyA)
             );
-            // Constant-pressure gauge in the periodic closed domain.
-            pEqn.setReference(0, 0.0);
+            // One global gauge, never one independent reference per
+            // decomposed processor. The master rank owns the single
+            // reference cell for this closed periodic test domain.
+            // A configurable global reference selection is a later
+            // requirement for complex domains.
+            if (Foam::Pstream::master())
+            {
+                pEqn.setReference(0, 0.0);
+            }
             pEqn.solve();
             phi = phiHbyA - pEqn.flux();
             U = HbyA - rAU*Foam::fvc::grad(p);
