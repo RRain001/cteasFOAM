@@ -87,12 +87,21 @@ patchOther="""boundaryField
  emptyPlanes { type empty; }
 }
 """
+patchPressure="""boundaryField
+{
+ xMin { type cyclic; }
+ xMax { type cyclic; }
+ yMin { type fixedFluxPressure; value uniform 0; }
+ yMax { type fixedFluxPressure; value uniform 0; }
+ emptyPlanes { type empty; }
+}
+"""
 write("0","U","volVectorField",
       "dimensions [0 1 -1 0 0 0 0];\n"
       "internalField uniform (0 0 0);\n"+patchU)
 write("0","p","volScalarField",
       "dimensions [0 2 -2 0 0 0 0];\n"
-      "internalField uniform 0;\n"+patchOther)
+      "internalField uniform 0;\n"+patchPressure)
 write("0","c","volScalarField",
       "dimensions [0 0 0 0 0 0 0];\n"
       "internalField uniform 1;\n"+patchOther)
