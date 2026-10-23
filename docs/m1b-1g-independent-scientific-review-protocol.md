@@ -115,3 +115,31 @@ external validation. The predeclared numerical bounds and caveats are
 in `docs/m1b-1g-warped-open-pressure-acceptance.md`.
 The need for an actual independent non-bot review, a separate
 `science-validated` judgement, and Draft status remains unchanged.
+
+## M1B-1g-6: nonuniform tracer and discrete mass-accounting evidence
+
+A qualified independent reviewer should also execute
+`bash tests/m1b1/run_open_pressure_tracer.sh` on the exact PR HEAD in
+official v2606. Inspect the **actual** unmodified C++ scalar equation
+`ddt(c)+div(phi,c)-laplacian(D,c)=0`, the optional
+`auditPassiveScalarFlux` implementation, `fvSchemes`
+`fluxRequired(c)`, the pressure-patch inflow switches in the scalar
+`inletOutlet` conditions, and dimensional consistency of all terms.
+
+Required reproducibility observations: three real warped 3-D
+forward/reverse/zero pressure cases, zero initial c, switched c=1
+*only on the active inflow*, D=0, nonuniform final c, same native mesh
+and initial U, 20 steps/180 p solves each, correct signed inward and
+outward volume/solute fluxes, whole-domain M(t) and discrete
+`M_new-M_old+dt ΣF_c=0` to the a priori tolerance. Confirm that a
+deliberate +0.01 m³ modification of the **printed** budget residual is
+detected by the independent Python parser. Evaluate whether the
+matrix-flux diagnostic is sufficiently independent from the solved
+equation for the claims being made; consider externally computed face
+fluxes as a distinct later validation. Neither this diagnostic nor
+zero-control positivity is independent external field evidence.
+
+This test uses a dimensionless passive tracer, not Bq/m³ activity
+or any verified HT/HTO physics. The independent review, external
+experimental validation and `science-validated` gate remain
+**NOT_RUN / NOT_APPROVED**; do not merge based on a Python checker.

@@ -424,3 +424,68 @@ mild warped canonical duct. It does not validate atmospheric inflow/outflow
 with pressure-turbulence coupling, building walls, URANS, HT/HTO, soil or
 any air–soil activity exchange. The scalar boundary condition remains
 uniform-one so reverse advection is not a tracer inflow pulse test.
+
+## M1B-1g-6: nonuniform passive scalar inlet transport and signed budget
+
+**Predeclared before first run of this increment.** The existing
+experimental incompressible laminar solver, warped 960-cell unit-cube
+duct, native cell centres, and PISO scheme are unchanged. A separate
+dimensionless passive tracer test uses c(x,0)=0, D=0 m²/s, and
+upwind advection. The inlet faces impose **c=1 only during inflow**
+through OpenFOAM `inletOutlet`; outbound faces retain zero-gradient.
+Forward dp=+0.1 at xMin, reverse dp=-0.1 at xMin, and dp=0 controls
+are generated from the existing canonical duct, with xMax fixed p=0
+and four no-slip y/z walls. For reverse flow the active tracer inlet
+moves to xMax. Non-inlet faces have inletValue 0, which is deliberately
+not the same as uniform-one scalar controls. The same physical warped
+mesh and fixed pressure/viscosity apply.
+
+The new optional `auditPassiveScalarFlux` in the solver records actual
+signed finite-volume passive-scalar face flux from the *solved equation*
+`cEqn.flux()`, the per-step initial/final volume integral, and
+`R = M_new - M_old + deltaT * sum_boundary(F_c)` in cubic metres.
+Here `c` is dimensionless and `F_c` has units m³/s; **no Bq
+activity** is modelled or implied. Positive boundary flux is outward.
+No user-facing HT/HTO or soil coupling production claim follows.
+
+Fixed fail-closed acceptance criteria:
+
+1. Official OpenFOAM v2606 Docker, native `blockMesh`,
+   `checkMesh`, `writeCellCentres`, actual warped vertices and
+   exact 960-cell fields. All three pressure cases execute 20 actual
+   time steps and 180 pressure solves, preserving fixed physical
+   pressure and four no-slip walls.
+2. The whole-domain discrete budget must report precisely one
+   new signed tracer-flux line and one scalar-integral record per
+   physical time step; every signed boundary flux, mass and residual
+   is finite. Each absolute per-step residual <= 1e-7 m³,
+   independently reconstructed balance from printed flux and
+   successive mass <= 2e-6 m³, and each positive-flow case
+   has strictly nondecreasing mass within 1e-8 m³; total
+   tracer concentration everywhere remains [−1e-9,1+1e-9].
+3. **Directional behaviour:** forward requires xMin tracer influx
+   (flux <−1e-3 m³/s); reverse requires xMax tracer influx
+   (flux <−1e-3 m³/s), with correct opposing signed volume fluxes,
+   opposite pressure signs, and final scalar inventory in each
+   direction >1e-3 m³. Total signed scalar-flux balance must
+   explain net gain; no net tracer source is allowed.
+4. At exactly zero pressure drop, velocity, volume flow, volume
+   tracer inventory and scalar boundary flux must stay within
+   1e-8 in their respective SI-derived units. A nonzero inlet
+   `inletValue` must **not** create scalar without flow when D=0.
+5. Injection of a deliberately corrupted logged tracer-budget
+   residual (+0.01 m³) **must** make the independent checker exit
+   nonzero, so the new criterion cannot silently pass by ignoring
+   the diagnostic.
+6. All old M1A/M1B full tests and prior M1B-1g upstream icoFoam
+   cross-comparison must remain intact. Existing full Docker
+   profile does not include this new targeted case; it must run
+   separately on the exact source SHA.
+
+Conservation is a **discrete finite-volume numerical verification**,
+not an atmospheric field/analytical plume calibration. There is no
+molecular diffusion, rainfall, buoyancy, turbulence, complex geometry,
+HT/HTO chemistry, Bq inventory, soil PDE or nonmatching interface
+exchange in this experiment. The scalar solver is not a production
+radiological transport implementation. Independent non-bot science
+review is still required before merging Draft PR #20.
