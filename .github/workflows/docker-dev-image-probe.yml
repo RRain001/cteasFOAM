@@ -43,6 +43,14 @@ jobs:
             --entrypoint /bin/bash \
             cteasfoam/official-v2606-dev:jammy-m0 \
             -c 'bash /workspace/tests/m1a/run_advection_regression.sh'
+      - name: Run real two-rank OpenFOAM PDE and reconstruction regression
+        shell: bash
+        run: |
+          docker run --rm --platform linux/amd64 \
+            --mount "type=bind,src=$PWD,dst=/workspace,readonly" \
+            --entrypoint /bin/bash \
+            cteasfoam/official-v2606-dev:jammy-m0 \
+            -c 'bash /workspace/tests/m1a/run_parallel_diffusion_regression.sh'
       - name: Preserve build/compiler evidence
         if: always()
         uses: actions/upload-artifact@v4
