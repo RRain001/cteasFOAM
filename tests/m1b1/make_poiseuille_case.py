@@ -67,6 +67,7 @@ write("constant","transportProperties","dictionary","""
 D [0 2 -1 0 0 0 0] 0;
 nu [0 2 -1 0 0 0 0] 0.05;
 momentumMode pisoLaminar;
+nPressureCorrectors 3;
 drivingAcceleration [0 1 -2 0 0 0 0] (0.1 0 0);
 """)
 patchU="""boundaryField
