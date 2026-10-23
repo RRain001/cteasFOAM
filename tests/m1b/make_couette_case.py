@@ -30,8 +30,11 @@ boundary
 (
     yMin { type wall; faces ((0 1 5 4)); }
     yMax { type wall; faces ((3 7 6 2)); }
-    emptyPlanes { type empty; faces ((0 4 7 3) (1 2 6 5)
-                                     (0 3 2 1) (4 5 6 7)); }
+    xMin { type cyclic; neighbourPatch xMax; transform translational;
+           separationVector (1 0 0); faces ((0 4 7 3)); }
+    xMax { type cyclic; neighbourPatch xMin; transform translational;
+           separationVector (-1 0 0); faces ((1 2 6 5)); }
+    emptyPlanes { type empty; faces ((0 3 2 1) (4 5 6 7)); }
 );
 mergePatchPairs ();
 """)
@@ -75,6 +78,8 @@ boundaryField
 {
     yMin { type fixedValue; value uniform (0 0 0); }
     yMax { type fixedValue; value uniform (1 0 0); }
+    xMin { type cyclic; }
+    xMax { type cyclic; }
     emptyPlanes { type empty; }
 }
 """)
@@ -85,6 +90,8 @@ boundaryField
 {
     yMin { type zeroGradient; }
     yMax { type zeroGradient; }
+    xMin { type cyclic; }
+    xMax { type cyclic; }
     emptyPlanes { type empty; }
 }
 """)
