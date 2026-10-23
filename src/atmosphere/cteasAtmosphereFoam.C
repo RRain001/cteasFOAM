@@ -160,8 +160,14 @@ int main(int argc, char* argv[])
                 Foam::fvm::laplacian(Foam::fvc::interpolate(rAU), p)
              == Foam::fvc::div(phiHbyA)
             );
-            // Constant-pressure gauge in the periodic closed domain.
-            pEqn.setReference(0, 0.0);
+            // All ranks MUST enter setReference(): needReference()
+            // performs a coupled/global patch check. Only the master
+            // supplies a valid local gauge cell; other ranks pass -1
+            // (the OpenFOAM refCell convention). No per-rank overfixing
+            // and no unmatched MPI collective.
+            const Foam::label pRefCell =
+                Foam::Pstream::master() ? 0 : -1;
+            pEqn.setReference(pRefCell, 0.0);
             pEqn.solve();
             phi = phiHbyA - pEqn.flux();
             U = HbyA - rAU*Foam::fvc::grad(p);
