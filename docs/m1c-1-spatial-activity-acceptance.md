@@ -1,0 +1,17 @@
+# M1C-1: spatial HT/HTO advection–diffusion–reaction verification (predeclared)
+
+Status: CANDIDATE / NOT SCIENTIFICALLY ACCEPTED. Parent is M1C-0 Draft PR #28 at exact SHA `a43bbba093a6453feca310c522c5158dc0fcb723`. This is a separately stacked candidate; do not change its scientific admission state. This specification is committed before implementation or numerical runs. No tolerance relaxation after results.
+
+## Equation, units, scope
+
+Test existing optional `activityMode htHto` in prescribed, incompressible, nonzero uniform `U=(0.25,0,0) m/s` on two *real* warped 3-D OpenFOAM v2606 meshes (8×20×6 = 960 and 12×30×9 = 3240). Periodic x faces and insulating y/z walls. Positive `DHT=0.01 m²/s`, `DHTO=0.02 m²/s`; first-order `kOx=0.4 s⁻¹`, `lambdaT=0.2 s⁻¹`. These accelerated rates are numerical benchmarks, not measured environmental rates. Euler backward time step 0.01 s, 40 steps to 0.4 s, upwind convection, corrected Laplacian and leastSquares gradient. Fields in Bq/m³; inventories in Bq; outward face activity flux in Bq/s.
+
+HT and HTO obey `ddt(HT)+div(phi,HT)-laplacian(DHT,HT)+(kOx+lambdaT)HT=0` and `ddt(HTO)+div(phi,HTO)-laplacian(DHTO,HTO)+lambdaT HTO=kOx HT(new)`. Initial x-dependent fields: `HT=1e6+2e5*cos(2*pi*x)`, `HTO=2e5+5e4*cos(2*pi*x)`. Analytic continuum traveling-wave benchmark with q=2π, ξ=x-Ut: HT mean `1e6*exp(-(k+lambda)t)` and cosine amplitude `2e5*exp(-(DHT*q²+k+lambda)t)`; HTO mean `exp(-lambda*t)*(2e5+1e6*(1-exp(-k*t)))`; HTO cosine amplitude `5e4*exp(-b*t)+k*2e5*(exp(-a*t)-exp(-b*t))/(b-a)` where `a=DHT*q²+k+lambda`, `b=DHTO*q²+lambda`. This continuum comparison is subject to Euler/upwind truncation error; it is NOT an exact discrete solution.
+
+## Frozen acceptance gates
+
+Both meshes must pass genuine `blockMesh`, warped native vertices, `checkMesh`, native cell-center initialization, real 40-step solver execution, final HT/HTO fields and separate species inventory/flux history. Explicit `auditActivityFlux true` must report signed xMin/xMax and total outward finite-volume matrix flux for **both** species; `fluxRequired { HT; HTO; }` is enabled. Independently recompute per-step `ΔA_HT+dt*F_HT+dt*(k+lambda)*A_HT,new`, `ΔA_HTO+dt*F_HTO+dt*lambda*A_HTO,new-dt*k*A_HT,new`, and total combined decay budget. Absolute species and total budget residuals ≤ `1e-5 Bq` per step; signed periodic xMin+xMax and total flux ≤ `1e-5 Bq/s` for each species; each x cyclic face magnitude > `1e3 Bq/s`. Reject nonfinite or negative concentrations and wrong dimensions.
+
+At t=0.4 s the maximum HT analytical error must be ≤ 45000 Bq/m³ coarse and ≤ 33000 fine; HTO ≤ 18000 coarse and ≤ 14000 fine. Each species' fine/coarse RMS error ratio must be >0 and ≤0.85. Native initialization max error ≤1e-6 Bq/m³; verify final field mean against log inventories within `1e-5 Bq` (using actual cell volumes, not unweighted average). Require no pressure solve in prescribed mode and no unplanned change to `c` default path. A deliberate +100000 Bq/m³ final HT tamper and +100000 Bq/s HT flux-log tamper must each fail independent checks.
+
+Run exact-SHA official OpenFOAM v2606 Docker targeted script, smoke and full; report image ID, SHA, run IDs and all failures. Existing M1C-0 closed reaction-box and M1B regression must remain PASS. No claim of upstream chemistry equivalence, atmospheric URANS, open boundaries, deposition, soil, interface, MPI or independent scientific validation. These are NOT_RUN; keep Draft and do not label science-validated/merge-verified until genuine independent non-Bot same-SHA scientific review.

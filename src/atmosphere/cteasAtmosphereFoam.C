@@ -525,6 +525,81 @@ int main(int argc, char* argv[])
                 Foam::fvc::domainIntegrate(HTO).value();
             Foam::Info << "CTEAS_M1C activity_HT_Bq=" << newHT
                        << " activity_HTO_Bq=" << newHTO << Foam::nl;
+            // Optional equation-level activity budget. Use the solved FVM
+            // matrix face fluxes, including the selected advective boundary
+            // coefficients and diffusion. Requires fluxRequired(HT,HTO).
+            // No assertion that a cyclic or open boundary has zero net flux.
+            if
+            (
+                transportProperties.lookupOrDefault<Foam::Switch>
+                (
+                    "auditActivityFlux", false
+                )
+            )
+            {
+                const Foam::label leftPatch =
+                    mesh.boundaryMesh().findPatchID("xMin");
+                const Foam::label rightPatch =
+                    mesh.boundaryMesh().findPatchID("xMax");
+                if (leftPatch < 0 || rightPatch < 0)
+                {
+                    FatalErrorInFunction
+                        << "auditActivityFlux requires xMin/xMax patches"
+                        << exit(FatalError);
+                }
+                auto boundaryFlux = [&]
+                (
+                    const Foam::surfaceScalarField& f,
+                    Foam::scalar& left,
+                    Foam::scalar& right
+                ) -> Foam::scalar
+                {
+                    Foam::scalar net = 0.0;
+                    left = 0.0;
+                    right = 0.0;
+                    forAll(f.boundaryField(), patchI)
+                    {
+                        const Foam::scalar value =
+                            Foam::sum(f.boundaryField()[patchI]);
+                        net += value;
+                        if (patchI == leftPatch) left = value;
+                        if (patchI == rightPatch) right = value;
+                    }
+                    Foam::reduce(net, Foam::sumOp<Foam::scalar>());
+                    Foam::reduce(left, Foam::sumOp<Foam::scalar>());
+                    Foam::reduce(right, Foam::sumOp<Foam::scalar>());
+                    return net;
+                };
+                const Foam::surfaceScalarField htFlux(htEqn.flux());
+                const Foam::surfaceScalarField htoFlux(htoEqn.flux());
+                Foam::scalar htLeft = 0.0, htRight = 0.0;
+                Foam::scalar htoLeft = 0.0, htoRight = 0.0;
+                const Foam::scalar htNet =
+                    boundaryFlux(htFlux, htLeft, htRight);
+                const Foam::scalar htoNet =
+                    boundaryFlux(htoFlux, htoLeft, htoRight);
+                const Foam::scalar dt = runTime.deltaTValue();
+                const Foam::scalar htResidual =
+                    newHT-oldHT + dt*htNet
+                  + dt*(kOx.value()+lambdaT.value())*newHT;
+                const Foam::scalar htoResidual =
+                    newHTO-oldHTO + dt*htoNet
+                  + dt*lambdaT.value()*newHTO-dt*kOx.value()*newHT;
+                const Foam::scalar totalResidual =
+                    newHT+newHTO-oldHT-oldHTO + dt*(htNet+htoNet)
+                  + dt*lambdaT.value()*(newHT+newHTO);
+                Foam::Info << "CTEAS_M1C flux_HT_xMin_Bq_s=" << htLeft
+                           << " flux_HT_xMax_Bq_s=" << htRight
+                           << " flux_HT_net_Bq_s=" << htNet
+                           << " flux_HT_budget_residual_Bq=" << htResidual
+                           << Foam::nl;
+                Foam::Info << "CTEAS_M1C flux_HTO_xMin_Bq_s=" << htoLeft
+                           << " flux_HTO_xMax_Bq_s=" << htoRight
+                           << " flux_HTO_net_Bq_s=" << htoNet
+                           << " flux_HTO_budget_residual_Bq=" << htoResidual
+                           << " flux_total_budget_residual_Bq="
+                           << totalResidual << Foam::nl;
+            }
             if
             (
                 transportProperties.lookupOrDefault<Foam::Switch>
