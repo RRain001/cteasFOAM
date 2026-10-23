@@ -32,8 +32,8 @@ def field(folder,name,kind):
 def log_check(path):
     txt=Path(path).read_text()
     data=[tuple(map(float,z)) for z in logpat.findall(txt)]
-    if len(data)!=20:
-        raise SystemExit(f"FAIL: pressure PDE did not complete 20 timesteps in {path}")
+    if len(data)!=40:
+        raise SystemExit(f"FAIL: pressure PDE did not complete 40 timesteps in {path}")
     if not all(math.isfinite(z) for row in data for z in row):
         raise SystemExit("FAIL: nonfinite MPI flux or energy")
     return data

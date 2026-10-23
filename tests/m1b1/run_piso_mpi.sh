@@ -32,6 +32,12 @@ if grep -E '(^|[[:space:]])(fatal )?error:|wmkdepend: could not open' "$work/bui
 fi
 for name in serial parallel; do
  python3 /workspace/tests/m1b1/make_tgv_case.py "$work/$name" 12
+ # Temporal-refinement stress gate: same 0.1s physical interval, twice
+ # the number of implicit Euler steps compared to analytic baseline.
+ sed -i 's/deltaT 0.005;/deltaT 0.0025;/' "$work/$name/system/controlDict"
+ sed -i 's/writeInterval 20;/writeInterval 40;/' "$work/$name/system/controlDict"
+ grep -q 'deltaT 0.0025;' "$work/$name/system/controlDict" || exit 28
+ grep -q 'writeInterval 40;' "$work/$name/system/controlDict" || exit 28
  blockMesh -case "$work/$name" > "$work/mesh$name.log" 2>&1 || {
   cat "$work/mesh$name.log"; exit 23;
  }

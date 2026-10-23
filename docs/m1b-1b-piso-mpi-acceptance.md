@@ -22,3 +22,15 @@ and final integrated kinetic energy. Requirements:
 
 This does not validate pressure boundary conditions for buildings,
 3D complex geometries, higher MPI counts, PIMPLE, turbulence, HT/HTO or soil.
+
+## Temporal-refinement diagnostic (2026-10-23)
+
+After MPI pressure reference repair, the 20-step benchmark showed
+conservative corrected flux (`max_div_phi=1.08e-13 s^-1`) but velocity
+serial/MPI L-infinity difference `1.79374566371e-3 m/s`, exceeding
+`1e-3 m/s` gate. To distinguish temporal splitting error from MPI
+boundary coupling defects, this PR runs the *same* 0.1 s periodic vortex
+with 40 implicit-Euler steps (`dt=0.0025s`) both serial and MPI.
+The original analytic Taylor–Green tests at dt=0.005 s are unchanged.
+No numeric tolerance is relaxed. If fine-time-step MPI does not meet
+existing gates, leave PR Draft and diagnose pressure flux reconstruction.
