@@ -20,16 +20,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Identify immutable candidate
-        env:
-          REPO: ${{ github.repository }}
-          EVENT: ${{ github.event_name }}
-          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          echo "Repository: $REPO"
-          echo "Event: $EVENT"
-          echo "Candidate SHA: $HEAD"
-          test -n "$HEAD"
+      - name: Verify exact-head Ubuntu Docker evidence for code PRs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              core.info('Main push after admission; no PR verification required.');
+              return;
+            }
+            const {owner, repo} = context.repo;
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: pr.number, per_page: 100
+            });
+            const codePaths = /^(?:native_cpp|engine|src|tests|cases|validation|models|model|scripts|cteas_ufotri|solvers|applications|system|constant)\//;
+            const changed = files.filter(f => codePaths.test(f.filename) && !/\.(?:md|rst|txt)$/i.test(f.filename));
+            if (!changed.length) {
+              core.info('Documentation/workflow-only PR; local software gate not required.');
+              return;
+            }
+            const statuses = await github.paginate(github.rest.repos.listCommitStatusesForRef, {
+              owner, repo, ref: pr.head.sha, per_page: 100
+            });
+            const exact = statuses.find(s => s.context === 'ubuntu-docker-full');
+            if (!exact || exact.state !== 'success') {
+              core.setFailed(`Missing successful ubuntu-docker-full status at ${pr.head.sha}. Run and verify Ubuntu Docker full, then publish signed-off exact-head status and rerun this gate.`);
+              return;
+            }
+            core.info(`Ubuntu Docker exact-head status accepted at ${pr.head.sha}: ${exact.description || ''}`);
 
   scientific-admission:
     name: scientific-admission
