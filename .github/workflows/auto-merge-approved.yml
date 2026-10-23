@@ -48,6 +48,8 @@ jobs:
           present={}
           for c in roll:
               name=c.get('name') or c.get('context') or ''
+              if name == 'enable-automerge':
+                  continue  # Control workflow cannot wait for itself; exclude previous control-only runs too.
               if c.get('status') is not None:
                   ok = c.get('status')=='COMPLETED' and c.get('conclusion')=='SUCCESS'
               else:
