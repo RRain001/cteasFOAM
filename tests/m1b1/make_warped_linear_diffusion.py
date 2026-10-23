@@ -39,5 +39,9 @@ text = schemes.read_text()
 old = "fluxRequired { default no; p; }"
 if text.count(old) != 1:
     raise SystemExit("FAIL: missing original fluxRequired")
-schemes.write_text(text.replace(old, "fluxRequired { default no; p; c; }"))
-print(f"M1B-1g-8 configured native-centre affine c=1-x on {len(values)} warped cells; D=0.01")
+gradient = "gradSchemes { default Gauss linear; }"
+if text.count(gradient) != 1:
+    raise SystemExit("FAIL: missing original gradient reconstruction")
+schemes.write_text(text.replace(old, "fluxRequired { default no; p; c; }")
+                   .replace(gradient, "gradSchemes { default leastSquares; }"))
+print(f"M1B-1g-8 configured native-centre affine c=1-x on {len(values)} warped cells; D=0.01, leastSquares gradient")

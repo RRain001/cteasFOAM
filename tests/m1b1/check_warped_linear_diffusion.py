@@ -32,6 +32,10 @@ if len(re.findall(r"(?m)^D \[0 2 -1 0 0 0 0\] 0\.01;$", properties)) != 1:
     raise SystemExit("FAIL: analytic D=0.01 is not the actual transport coefficient")
 if properties.count("auditPassiveScalarFlux true;") != 1:
     raise SystemExit("FAIL: native matrix-flux audit disabled")
+schemes = (case / "system/fvSchemes").read_text()
+if schemes.count("gradSchemes { default leastSquares; }") != 1 or (
+        schemes.count("laplacianSchemes { default Gauss linear corrected; }") != 1):
+    raise SystemExit("FAIL: unexpected nonorthogonal gradient/laplacian scheme")
 boundary = (case / "0/c").read_text()
 for patch, value in (("xMin", 1), ("xMax", 0)):
     pat = rf"\b{patch}\s*\{{\s*type\s+fixedValue;\s*value\s+uniform\s+{value};"

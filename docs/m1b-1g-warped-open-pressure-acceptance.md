@@ -602,3 +602,25 @@ without its separate same-SHA non-bot independent science review.
 Runner: `bash tests/m1b1/run_warped_linear_diffusion.sh` in the
 pinned official v2606 Docker environment, with the repository
 mounted read-only at `/workspace`.
+
+### M1B-1g-8 first-run failure and numerical-method investigation
+
+The first exact-SHA trial at `ab59aab97dd6126b6f4460e8cdb2a39ffe8b9c8f`
+**FAILED** its predeclared affine analytical criterion in real official
+v2606 Docker: `max|c-(1-x)|=7.284483218605864e-05` and
+`RMS=2.1224481228185446e-05`, exceeding the unchanged
+`1e-5` and `1e-6` limits. The solver did execute and the
+printed final scalar fluxes were -0.0100011456190044 and
++0.0100012666373043 m3/s; mass was 0.499999900358649 m3.
+The targeted runner exited **1**, so this is not a scientific PASS.
+
+The next candidate explicitly tests a *different gradient
+reconstruction*, OpenFOAM `leastSquares` rather than
+`Gauss linear`, in this dedicated analytical case only,
+while retaining `Gauss linear corrected` Laplacian,
+the **same** physical mesh/BCs/D/timestep, and **all original
+acceptance thresholds**. This is a hypothesis about skew-cell
+gradient reconstruction, not a post hoc relaxation of error
+limits or proof that the baseline Gauss-linear scheme passed.
+Both configurations and their separate source SHAs must remain
+visible in the acceptance record.
