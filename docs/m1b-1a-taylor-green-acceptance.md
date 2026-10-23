@@ -18,7 +18,7 @@ The analytic Taylor–Green reference on the unit periodic domain is:
 
 u = sin(2πx) cos(2πy) exp(-8π² νt)
 v = -cos(2πx) sin(2πy) exp(-8π² νt)
-p = -(cos(4πx)+cos(4πy))/4 exp(-16π² νt)
+p = +(cos(4πx)+cos(4πy))/4 exp(-16π² νt)
 
 The vorticity evolves with molecular nu=0.01 m²/s. Both
 12×12×1 and 24×24×1 OpenFOAM cases run 20 implicit Euler steps
@@ -33,3 +33,10 @@ velocity and pressure errors. All prior M1A/Couette tests must still pass.
 
 These bounds are initial non-regression scientific gates, not a formal
 mesh-independent convergence or universal 3-D accuracy claim.
+
+The pressure sign follows the chosen velocity orientation:
+`u=sin(2πx)cos(2πy)`, `v=-cos(2πx)sin(2πy)`.
+Its advective acceleration is `(+πsin(4πx), +πsin(4πy))`,
+which is balanced by `-∇p` for `p=+(cos(4πx)+cos(4πy))/4`.
+This sign was caught by the first full-field pressure regression;
+retain both the failed CI and this correction in review evidence.

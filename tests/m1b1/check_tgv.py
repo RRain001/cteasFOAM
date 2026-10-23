@@ -44,7 +44,7 @@ def check(case,log,n):
             x=(i+.5)/n
             exactU.append((math.sin(2*math.pi*x)*math.cos(2*math.pi*y)*decay,
                  -math.cos(2*math.pi*x)*math.sin(2*math.pi*y)*decay,0))
-            exactP.append(-.25*(math.cos(4*math.pi*x)+math.cos(4*math.pi*y))*p_decay)
+            exactP.append(+.25*(math.cos(4*math.pi*x)+math.cos(4*math.pi*y))*p_decay)
     uerr=max(abs(a-b) for v,w in zip(U,exactU) for a,b in zip(v,w))
     pmean=sum(p)/(n*n)
     pref=sum(exactP)/(n*n)

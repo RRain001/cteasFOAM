@@ -90,7 +90,7 @@ for j in range(n):
         x=(i+0.5)/n
         u=math.sin(2*math.pi*x)*math.cos(2*math.pi*y)
         v=-math.cos(2*math.pi*x)*math.sin(2*math.pi*y)
-        p=-0.25*(math.cos(4*math.pi*x)+math.cos(4*math.pi*y))
+        p=+0.25*(math.cos(4*math.pi*x)+math.cos(4*math.pi*y))
         uvals.append(f"({u:.17g} {v:.17g} 0)")
         pvals.append(f"{p:.17g}")
 patches="""boundaryField
