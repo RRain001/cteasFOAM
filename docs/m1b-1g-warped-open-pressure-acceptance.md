@@ -298,3 +298,84 @@ mesh, scientific convergence or conservation gates. Subsequent
 three-resolution Docker run returned **PASS, exit 0**. This
 failure and checker correction are retained to avoid implying
 first-attempt numerical acceptance.
+
+## M1B-1g-4: separate upstream OpenFOAM icoFoam solver comparison
+
+This increment provides a second **numerical implementation**:
+the genuine unmodified `icoFoam` binary from the same pinned
+official OpenCFD/Keysight v2606 distribution. It is **not** an
+independent human review, external measurements, validation of URANS
+or a claim of scientific signoff. The CTEAS solver remains experimental.
+
+Compare a controlled 8×20×6 interior-warped physical fixed-pressure
+unit duct and a zero-pressure-drop negative control. For **each**
+pair the official icoFoam and CTEAS runs use byte-identical native
+`polyMesh`, OpenFOAM-generated C centroids, U/p/c initial values,
+viscosity nu=0.05 m²/s, pressure Δp=0.1 or 0 m²/s², four
+no-slip walls, `fvSchemes`, `fvSolution`, timestep 0.02 s,
+t_final=0.4 s and PISO counts (three pressure corrections, two
+additional nonorthogonal corrections). Only the
+`application` entry of the `controlDict` differs, and the CTEAS
+transport dictionary includes its passive scalar settings that
+stock icoFoam simply ignores. The solver runs are actual, not
+replayed/fabricated fields.
+
+**Predeclared criteria before running the cross-solver case:**
+- Exact binary input equality (except `application`), with actual
+  upstream `icoFoam` completing 20 steps and 180 genuine
+  p solves per case; OpenFOAM mesh quality and native centres
+  inspected independently.
+- CTEAS retains *all* existing distorted-duct analytic, pressure
+  BC, physical signed flux and scalar-conservation tests.
+- Because these are distinct legitimate PISO implementations,
+  not bitwise-identical algorithms, accept final field
+  **componentwise U L∞ ≤0.007 m/s, U RMS ≤0.003 m/s, absolute
+  fixed-gauge p L∞ ≤0.007 m²/s²**. Compare raw absolute p because
+  the boundary fixedValues anchor its physical gauge.
+- Upstream `icoFoam` must itself remain within independent
+  transient Stokes axial-U L∞ ≤0.025 m/s and transverse-U
+  L∞ ≤0.02 m/s.
+- Both independent programs' zero-drive controls must end with
+  maximum |U| and |p| ≤1e-8 in their relevant units;
+  fields/logs must be finite and complete.
+
+Unlike the prior analytic Stokes series, upstream `icoFoam`
+solves the nonlinear incompressible pressure-corrected momentum PDE
+directly. Agreement would strengthen implementation-level
+verification but not give a continuum or real-site error bound.
+If the cross-implementation gate fails, retain a visible
+failure and investigate rather than retrofitting its thresholds.
+
+Runner: `bash tests/m1b1/run_icofoam_cross_solver.sh`.
+
+### M1B-1g-4 upstream solver observation (experimental scope)
+
+On the official OpenCFD v2606 image, with identical physical mesh,
+initial U/p/c, timestep, BCs and `fvSchemes/fvSolution`,
+the real **unmodified upstream icoFoam binary** and CTEAS
+`pisoLaminar` produced **exactly identical printed final U
+and absolute kinematic p**: componentwise U L∞ = 0, RMS = 0
+and p L∞ = 0 at the 960-cell warped driven case, as well
+as zero U/p under Δp=0. Both completed **20 steps with 180
+p matrix solves**. The upstream U analytic Stokes L∞ error
+was 0.00342234987151 m/s. Separately injecting +0.02 m/s
+into one native upstream final U vector caused the independently
+executed checker to fail **as required**.
+
+The first exploratory run failed with the authentic upstream
+`icoFoam` error `Entry 'pFinal' not found in dictionary
+system/fvSolution/solvers`. Official icoFoam requires that
+final-iteration solver entry; both inputs were then given the
+identical `pFinal { $p; relTol 0; }` setting. The CTEAS
+solver ignores that extra entry. No physical PDE, time, mesh,
+analytic/conservation threshold or solver C++ change was made.
+After this **configuration correction**, the repeated real
+Docker test and corruption-negative check passed, exit 0.
+
+Matching printed numeric fields indicates the current
+experimental PISO mode reproduces the same discrete upstream
+OpenFOAM solver path under this canonical configuration. It
+does **not** establish an independent discretization or
+experimental/real-atmosphere validation; shared OpenFOAM
+libraries, algorithms and conditions mean the two outputs
+are not independent physical observations.
