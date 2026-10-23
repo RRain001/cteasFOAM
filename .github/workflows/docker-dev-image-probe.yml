@@ -131,6 +131,14 @@ jobs:
             --entrypoint /bin/bash \
             cteasfoam/official-v2606-dev:jammy-m0 \
             -c 'bash /workspace/tests/m1b1/run_warped_abc_mpi.sh'
+      - name: Run M1B-1f controlled warped mesh amplitude sensitivity
+        shell: bash
+        run: |
+          docker run --rm --platform linux/amd64 \
+            --mount "type=bind,src=$PWD,dst=/workspace,readonly" \
+            --entrypoint /bin/bash \
+            cteasfoam/official-v2606-dev:jammy-m0 \
+            -c 'bash /workspace/tests/m1b1/run_warp_amplitude_study.sh'
       - name: Preserve build/compiler evidence
         if: always()
         uses: actions/upload-artifact@v4
