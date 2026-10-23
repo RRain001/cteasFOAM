@@ -184,26 +184,6 @@ int main(int argc, char* argv[])
                     << "nPressureCorrectors must lie in [1, 12]"
                     << exit(FatalError);
             }
-            // Inner non-orthogonal correction is distinct from the
-            // existing outer PISO pressure-velocity corrector count.
-            // Zero (one p solve) preserves all validated older cases.
-            const Foam::label nNonOrthogonalCorrectors =
-                transportProperties.lookupOrDefault<Foam::label>
-                (
-                    "nNonOrthogonalCorrectors", 0
-                );
-            if
-            (
-                nNonOrthogonalCorrectors < 0
-             || nNonOrthogonalCorrectors > 6
-            )
-            {
-                FatalErrorInFunction
-                    << "nNonOrthogonalCorrectors must lie in [0, 6]"
-                    << exit(FatalError);
-            }
-            Foam::Info << "CTEAS_M1B1 nonorthogonal_correctors="
-                       << nNonOrthogonalCorrectors << Foam::nl;
             Foam::volScalarField rAU("rAU", 1.0/UEqn.A());
             for
             (
@@ -233,35 +213,21 @@ int main(int argc, char* argv[])
                 // no-slip walls; invisible in the original fully cyclic TGV.
                 Foam::adjustPhi(phiHbyA, U, p);
                 Foam::constrainPressure(p, U, phiHbyA, rAU);
-                // Rebuild the pressure equation for each non-orthogonal
-                // correction because corrected snGrad/laplacian operators
-                // contain explicit pressure contributions. Correct phi
-                // ONLY on the final inner pass (OpenFOAM PISO convention).
-                // All ranks enter setReference for each pressure solve.
-                for
+                Foam::fvScalarMatrix pEqn
                 (
-                    Foam::label nonOrthI = 0;
-                    nonOrthI <= nNonOrthogonalCorrectors;
-                    ++nonOrthI
-                )
-                {
-                    Foam::fvScalarMatrix pEqn
-                    (
-                        Foam::fvm::laplacian
-                        (
-                            Foam::fvc::interpolate(rAU), p
-                        )
-                     == Foam::fvc::div(phiHbyA)
-                    );
-                    const Foam::label pRefCell =
-                        Foam::Pstream::master() ? 0 : -1;
-                    pEqn.setReference(pRefCell, 0.0);
-                    pEqn.solve();
-                    if (nonOrthI == nNonOrthogonalCorrectors)
-                    {
-                        phi = phiHbyA - pEqn.flux();
-                    }
-                }
+                    Foam::fvm::laplacian(Foam::fvc::interpolate(rAU), p)
+                 == Foam::fvc::div(phiHbyA)
+                );
+                // All ranks MUST enter setReference(): needReference()
+                // performs a coupled/global patch check. Only the master
+                // supplies a valid local gauge cell; other ranks pass -1
+                // (the OpenFOAM refCell convention). No per-rank overfixing
+                // and no unmatched MPI collective.
+                const Foam::label pRefCell =
+                    Foam::Pstream::master() ? 0 : -1;
+                pEqn.setReference(pRefCell, 0.0);
+                pEqn.solve();
+                phi = phiHbyA - pEqn.flux();
                 U = HbyA - rAU*Foam::fvc::grad(p);
                 U.correctBoundaryConditions();
             }
