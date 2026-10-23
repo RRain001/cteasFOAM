@@ -1,0 +1,95 @@
+name: PR admission gates
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-admission-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-admission:
+    name: repository-admission
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify exact-head Ubuntu Docker evidence for code PRs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              core.info('Main push after admission; no PR verification required.');
+              return;
+            }
+            const {owner, repo} = context.repo;
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: pr.number, per_page: 100
+            });
+            const codePaths = /^(?:native_cpp|engine|src|tests|cases|validation|models|model|scripts|cteas_ufotri|solvers|applications|system|constant)\//;
+            const changed = files.filter(f => codePaths.test(f.filename) && !/\.(?:md|rst|txt)$/i.test(f.filename));
+            if (!changed.length) {
+              core.info('Documentation/workflow-only PR; local software gate not required.');
+              return;
+            }
+            const statuses = await github.paginate(github.rest.repos.listCommitStatusesForRef, {
+              owner, repo, ref: pr.head.sha, per_page: 100
+            });
+            const exact = statuses.find(s => s.context === 'ubuntu-docker-full');
+            if (!exact || exact.state !== 'success') {
+              core.setFailed(`Missing successful ubuntu-docker-full status at ${pr.head.sha}. Run and verify Ubuntu Docker full, then publish signed-off exact-head status and rerun this gate.`);
+              return;
+            }
+            core.info(`Ubuntu Docker exact-head status accepted at ${pr.head.sha}: ${exact.description || ''}`);
+
+  scientific-admission:
+    name: scientific-admission
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce independent scientific review for scientific-code changes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (!pr) {
+              core.info('Protected main push: PR science admission was evaluated before merge.');
+              return;
+            }
+            const {owner, repo} = context.repo;
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: pr.number, per_page: 100
+            });
+            const protectedPaths = /^(?:native_cpp|engine|src|tests|cases|validation|models|model|scripts|cteas_ufotri|solvers|applications|system|constant)\//;
+            const scientific = files.filter(f => protectedPaths.test(f.filename) && !/\.(?:md|rst|txt)$/i.test(f.filename));
+            if (!scientific.length) {
+              core.info('No scientific source/test paths changed; scientific review not required for this PR.');
+              return;
+            }
+            if (pr.draft) {
+              core.setFailed('Scientific code PR is Draft and cannot be accepted.');
+              return;
+            }
+            const labels = new Set((pr.labels || []).map(l => l.name));
+            if (!labels.has('science-validated')) {
+              core.setFailed('Scientific code changed without independently verified science-validated label.');
+              return;
+            }
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner, repo, pull_number: pr.number, per_page: 100
+            });
+            const approved = reviews.some(r => r.state === 'APPROVED'
+              && r.commit_id === pr.head.sha
+              && r.user && r.user.login !== pr.user.login && r.user.type !== 'Bot');
+            if (!approved) {
+              core.setFailed('Missing independent non-bot APPROVED review at exact PR head SHA.');
+              return;
+            }
+            core.info(`Science review admission passed at ${pr.head.sha} for ${scientific.length} source/test file(s).`);
