@@ -1,5 +1,11 @@
 # Agent development instructions
 
+## Owner's current CI and merge decision (2026-10-23)
+- Retain automatic pull_request GitHub Actions OpenFOAM v2606 checks; no owner-initiated manual click is required. Prior manual-only Draft PR #21 was closed.
+- Continue local Ubuntu Docker compile/smoke/full and targeted analytic conservation checks first; each candidate PR then triggers automatic relevant GitHub Actions on its exact HEAD.
+- After every applicable software, analytic, independent validation and GitHub check passes, automatically mark PR Ready and squash merge or enable native auto-merge without a separate owner request. Do not infer HT/HTO, soil physics, coupling or URANS scientific PASS from existing M0/M1 tests. Draft PR #20 remains unmerged until its actual scope is accepted.
+
+
 Project: RRain001/cteasFOAM. All code is public. Never upload proprietary experimental data, restricted PDFs, personal credentials, or copyrighted upstream OpenFOAM source snapshots without rights review.
 
 ## Fixed baseline and boundaries
