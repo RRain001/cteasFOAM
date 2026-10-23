@@ -22,7 +22,11 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   realistic HT/HTO parameters and coupled deposition are future milestones.
   Optional `auditActivityFlux true` reports the signed HT/HTO matrix
   face flux (Bq/s) and per-species/combined discrete activity residuals;
-  the current M1C-1 benchmark is periodic, not an accepted open-boundary case.
+  M1C-1 verifies a periodic domain. M1C-3 adds a **separately gated**
+  nonperiodic pressure-open HT/HTO inflow/outflow and actual finite-volume
+  signed Bq budget benchmark, including flow reversal and zero-flow
+  negative control. It is a numerical research prototype, not independent
+  atmospheric/field validation.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
