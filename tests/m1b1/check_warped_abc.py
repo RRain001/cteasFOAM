@@ -34,7 +34,10 @@ def measure_mesh(log):
         m=re.search(pattern,s,re.I)
         if not m:
             raise SystemExit(f"FAIL: missing OpenFOAM checkMesh metric {pattern}")
-        return float(m.group(1))
+        # checkMesh human-readable prose may put a sentence-ending '.'
+        # immediately after a numeric quantity. Strip punctuation only,
+        # never alter the parsed value or any scientific acceptance bound.
+        return float(m.group(1).rstrip("."))
     if "Mesh OK." not in s:
         raise SystemExit("FAIL: official checkMesh did not report Mesh OK")
     nonorth=value(r"Mesh non-orthogonality Max:\s*([-+0-9.eE]+)")
