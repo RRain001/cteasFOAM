@@ -7,8 +7,10 @@ passed their scoped gates. M1B-1f laminar pressure–velocity canonical tests
 through three-dimensional warped ABC meshes have passed exact-HEAD v2606 CI.
 M1B-1g distorted three-dimensional nonperiodic fixed-pressure duct is an
 experimental acceptance candidate. M1C-0 adds an **experimental** HT/HTO
-activity reaction/transport branch with a closed-box numerical gate; it is
-NOT independent scientific validation. Atmospheric URANS, complete HT/HTO
+activity reaction/transport branch with a closed-box numerical gate. M1C-1
+adds a separately gated warped-3D periodic HT/HTO advection–diffusion–reaction
+benchmark and finite-volume face-flux activity budget; neither is independent
+scientific validation. Atmospheric URANS, complete HT/HTO
 physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALIDATED.**
 
 ## Intended architecture
@@ -18,6 +20,9 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   modes. Optional M1C-0 HT/HTO advection–diffusion–reaction prototype is
   **not** validated beyond the closed uniform reaction box. URANS closure,
   realistic HT/HTO parameters and coupled deposition are future milestones.
+  Optional `auditActivityFlux true` reports the signed HT/HTO matrix
+  face flux (Bq/s) and per-species/combined discrete activity residuals;
+  the current M1C-1 benchmark is periodic, not an accepted open-boundary case.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
