@@ -160,15 +160,14 @@ int main(int argc, char* argv[])
                 Foam::fvm::laplacian(Foam::fvc::interpolate(rAU), p)
              == Foam::fvc::div(phiHbyA)
             );
-            // One global gauge, never one independent reference per
-            // decomposed processor. The master rank owns the single
-            // reference cell for this closed periodic test domain.
-            // A configurable global reference selection is a later
-            // requirement for complex domains.
-            if (Foam::Pstream::master())
-            {
-                pEqn.setReference(0, 0.0);
-            }
+            // All ranks MUST enter setReference(): needReference()
+            // performs a coupled/global patch check. Only the master
+            // supplies a valid local gauge cell; other ranks pass -1
+            // (the OpenFOAM refCell convention). No per-rank overfixing
+            // and no unmatched MPI collective.
+            const Foam::label pRefCell =
+                Foam::Pstream::master() ? 0 : -1;
+            pEqn.setReference(pRefCell, 0.0);
             pEqn.solve();
             phi = phiHbyA - pEqn.flux();
             U = HbyA - rAU*Foam::fvc::grad(p);
