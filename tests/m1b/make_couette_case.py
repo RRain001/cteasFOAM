@@ -62,7 +62,7 @@ snGradSchemes { default corrected; }
 write("system","fvSolution","dictionary","""
 solvers
 {
-    U { solver PBiCGStab; preconditioner DILU; tolerance 1e-13; relTol 0; }
+    U { solver PCG; preconditioner DIC; tolerance 1e-13; relTol 0; }
     c { solver PBiCGStab; preconditioner DILU; tolerance 1e-13; relTol 0; }
 }
 """)
