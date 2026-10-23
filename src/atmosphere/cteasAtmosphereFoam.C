@@ -67,6 +67,26 @@ int main(int argc, char* argv[])
         }
     }
 
+    // A constant acceleration has the same streamwise momentum effect as
+    // a prescribed uniform pressure gradient in a periodic channel.
+    // Default zero preserves every earlier M1A/M1B benchmark unchanged.
+    Foam::dimensionedVector drivingAcceleration
+    (
+        "drivingAcceleration", Foam::dimAcceleration, Foam::vector::zero
+    );
+    if
+    (
+        momentumMode == "pisoLaminar"
+     && transportProperties.found("drivingAcceleration")
+    )
+    {
+        drivingAcceleration = Foam::dimensionedVector
+        (
+            "drivingAcceleration", Foam::dimAcceleration,
+            transportProperties
+        );
+    }
+
     Foam::volVectorField U
     (
         Foam::IOobject
@@ -145,7 +165,7 @@ int main(int argc, char* argv[])
               + Foam::fvm::div(phi, U)
               - Foam::fvm::laplacian(nu, U)
             );
-            Foam::solve(UEqn == -Foam::fvc::grad(p));
+            Foam::solve(UEqn == -Foam::fvc::grad(p) + drivingAcceleration);
 
             Foam::volScalarField rAU("rAU", 1.0/UEqn.A());
             Foam::volVectorField HbyA("HbyA", rAU*UEqn.H());
