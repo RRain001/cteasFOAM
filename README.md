@@ -6,14 +6,18 @@ OpenFOAM v2606-based research software for coupled atmospheric and soil tritium 
 passed their scoped gates. M1B-1f laminar pressure–velocity canonical tests
 through three-dimensional warped ABC meshes have passed exact-HEAD v2606 CI.
 M1B-1g distorted three-dimensional nonperiodic fixed-pressure duct is an
-experimental acceptance candidate. Validated atmospheric URANS, HT/HTO,
-soil physics and air–soil coupling are NOT IMPLEMENTED / NOT VALIDATED.**
+experimental acceptance candidate. M1C-0 adds an **experimental** HT/HTO
+activity reaction/transport branch with a closed-box numerical gate; it is
+NOT independent scientific validation. Atmospheric URANS, complete HT/HTO
+physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALIDATED.**
 
 ## Intended architecture
 
 - `src/atmosphere/`: OpenFOAM executable with prescribed-U passive scalar,
   special Couette and experimentally pressure-corrected **laminar** momentum
-  modes. URANS closure and HT/HTO activity PDEs are **future milestones**.
+  modes. Optional M1C-0 HT/HTO advection–diffusion–reaction prototype is
+  **not** validated beyond the closed uniform reaction box. URANS closure,
+  realistic HT/HTO parameters and coupled deposition are future milestones.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
