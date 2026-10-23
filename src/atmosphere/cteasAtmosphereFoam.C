@@ -247,6 +247,37 @@ int main(int argc, char* argv[])
                 }
             }
             Foam::reduce(netBoundaryFlux, Foam::sumOp<Foam::scalar>());
+            // Optional direct measurement of true open-boundary flow.
+            // A net zero flux alone cannot prove nonzero inlet/outlet
+            // throughflow, so audit each named pressure patch separately.
+            if
+            (
+                transportProperties.lookupOrDefault<Foam::Switch>
+                (
+                    "auditOpenPressureFlux", false
+                )
+            )
+            {
+                Foam::scalar qIn = 0.0;
+                Foam::scalar qOut = 0.0;
+                const Foam::label inPatch =
+                    mesh.boundaryMesh().findPatchID("xMin");
+                const Foam::label outPatch =
+                    mesh.boundaryMesh().findPatchID("xMax");
+                if (inPatch >= 0)
+                {
+                    qIn = Foam::sum(phi.boundaryField()[inPatch]);
+                }
+                if (outPatch >= 0)
+                {
+                    qOut = Foam::sum(phi.boundaryField()[outPatch]);
+                }
+                Foam::reduce(qIn, Foam::sumOp<Foam::scalar>());
+                Foam::reduce(qOut, Foam::sumOp<Foam::scalar>());
+                Foam::Info << "CTEAS_M1B1 pressure_inlet_flux=" << qIn
+                           << " pressure_outlet_flux=" << qOut
+                           << Foam::nl;
+            }
             Foam::Info << "CTEAS_M1B1 max_div_phi=" << maxDivPhi
                        << " boundary_net_flux=" << netBoundaryFlux
                        << " kinetic_energy="
