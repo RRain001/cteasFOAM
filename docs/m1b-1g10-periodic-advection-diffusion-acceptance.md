@@ -1,0 +1,17 @@
+# M1B-1g-10: warped 3-D periodic advection–diffusion (PRE-RUN)
+
+**Acceptance thresholds in this document are fixed before the first solver execution.** The preceding M1B-1g-9 experiment only tested zero-flow diffusion. This experiment tests nonzero prescribed divergence-free flow and positive molecular diffusivity simultaneously. It does not establish URANS, pressure-coupled arbitrary 3-D flow, HT/HTO, soil or interface physics.
+
+The exact continuum reference on the unit cube is
+
+`c(x,t)=0.5+0.25*exp(-D*(2*pi)^2*t)*cos(2*pi*(x-U*t))`,
+
+with constant `U=(0.25,0,0) m/s`, `D=0.01 m2/s`, x-periodic boundaries and zero normal scalar gradients on y/z walls. `c(x,0)` is initialized at genuine OpenFOAM cell centres, not imposed as an exact field at later times. The scalar is dimensionless and its volume integral has units of m3. A fixed prescribed velocity is deliberate: this isolates the advection–diffusion discretization, not a PISO/URANS validation.
+
+1. Generate independent real `blockMesh` 8x20x6 (960) and 12x30x9 (3240) 3-D meshes, then deform only interior vertices using the existing x-displacement `0.04*sin(pi*x)*sin(pi*y)*sin(pi*z)`. Require official v2606 `checkMesh -allGeometry -allTopology` to report `Mesh OK.`, exactly `(nx-1)(ny-1)(nz-1)` moved interior vertices, total volume within 1e-6 of 1 m3, non-orthogonality strictly between 1 and 65 degrees, skewness below 3.5, positive minimum volume. All six external surfaces remain geometrically unchanged. xMin/xMax must be genuine translational cyclic partners; y/z remain physical walls.
+2. Run the unchanged `cteasAtmosphereFoam` prescribed-velocity scalar FVM, with `D=0.01`, `dt=0.01 s`, `t_end=0.4 s` (40 real time steps), `Gauss upwind` convection, `leastSquares` gradients, `Gauss linear corrected` diffusion, actual matrix-flux audit and `writePrecision=15`. Require finite fields and logs, initial native-centre scalar error <=1e-12, and a spatially uniform velocity equal to `(0.25,0,0)` within 1e-12. No pressure correction is expected in this prescribed-flow experiment.
+3. Compare every final native cell value to the analytic traveling/decaying cosine: coarse Linf <=0.06 and RMS <=0.035; fine Linf <=0.04 and RMS <=0.025. Both RMS values must be strictly positive and fine/coarse RMS <=0.85. These are predeclared two-level consistency bounds, not a formal order-of-convergence claim. Final c must remain in [0.23,0.77].
+4. Independently recompute all 40 discrete scalar inventory budgets: each `|M_new-M_old+dt*F_boundary| <=2e-6 m3`, logged residual <=1e-7 m3, cumulative inventory drift <=1e-6 m3. Cyclic xMin/xMax fluxes must have opposite sign and cancel to <=1e-8 m3/s each step; total boundary scalar flux <=1e-8 m3/s. Both cyclic end flux magnitudes must exceed 0.02 m3/s to demonstrate actual nonzero transport (zero-flow is not an acceptable surrogate). The initial total scalar inventory must be within 0.02 m3 of 0.5 m3.
+5. Deliberately corrupt one actual fine-grid final scalar cell by +0.08; the independent checker must reject the modified native field for an analytical-error reason. Keep the negative-control failure log. Prior M1B-1g-7/8/9, official `icoFoam` cross-solver, exact-SHA Docker smoke/full, and independent non-bot scientific review remain separate gates. No scientific approval or merge authorization is implied by this test.
+
+Runner: `tests/m1b1/run_warped_periodic_advection_diffusion.sh`. This is a self-contained prescribed-U scalar experiment with no model-code changes unless the predeclared test reveals a genuine implementation defect.
