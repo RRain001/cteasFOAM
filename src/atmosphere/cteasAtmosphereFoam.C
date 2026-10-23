@@ -1,8 +1,7 @@
-/* cteasFOAM staged atmospheric solver: M1A scalar + M1B-0 laminar shear.
- * M1B-0 solves viscous transient momentum diffusion ONLY in an exactly
- * divergence-free planar shear flow. It is not a general pressure-projection,
- * Navier-Stokes, buoyant, turbulent or URANS model.
- * HT/HTO activity, deposition and air/soil coupling remain unimplemented.
+/* cteasFOAM: staged scalar, special-case Couette and M1B-1a laminar
+ * pressure-corrected finite-volume modes. The PISO-style projection is
+ * initially validated only with a periodic 2D Taylor-Green vortex.
+ * No validated arbitrary 3D flow, URANS, HT/HTO, soil or interface yet.
  */
 #include "fvCFD.H"
 
@@ -44,16 +43,17 @@ int main(int argc, char* argv[])
         )
     );
 
-    if (momentumMode != "prescribed" && momentumMode != "laminarShear")
+    if (momentumMode != "prescribed" && momentumMode != "laminarShear"
+        && momentumMode != "pisoLaminar")
     {
         FatalErrorInFunction
             << "Unsupported momentumMode: " << momentumMode
-            << ". Valid: prescribed, laminarShear"
+            << ". Valid: prescribed, laminarShear, pisoLaminar"
             << exit(FatalError);
     }
 
     Foam::dimensionedScalar nu("nu", Foam::dimViscosity, 0.0);
-    if (momentumMode == "laminarShear")
+    if (momentumMode == "laminarShear" || momentumMode == "pisoLaminar")
     {
         nu = Foam::dimensionedScalar
         (
@@ -87,6 +87,25 @@ int main(int argc, char* argv[])
         mesh
     );
 
+    // Only the pressure-corrected mode reads/writes a physical kinematic
+    // pressure [m2/s2]. Older scalar and Couette case files need no p field.
+    Foam::autoPtr<Foam::volScalarField> pField;
+    if (momentumMode == "pisoLaminar")
+    {
+        pField.reset
+        (
+            new Foam::volScalarField
+            (
+                Foam::IOobject
+                (
+                    "p", runTime.timeName(), mesh,
+                    Foam::IOobject::MUST_READ, Foam::IOobject::AUTO_WRITE
+                ),
+                mesh
+            )
+        );
+    }
+
     Foam::surfaceScalarField phi("phi", Foam::fvc::flux(U));
     Foam::Info << "cteasFOAM mode=" << momentumMode
                << " D=" << D.value() << Foam::nl
@@ -114,6 +133,65 @@ int main(int argc, char* argv[])
                        << Foam::nl;
         }
 
+        if (momentumMode == "pisoLaminar")
+        {
+            // Minimal laminar PISO-style pressure correction. Its full
+            // 2-D periodic Taylor-Green reference and flux divergence
+            // are independently tested. Full 3-D flow is NOT accepted yet.
+            Foam::volScalarField& p = pField();
+            Foam::fvVectorMatrix UEqn
+            (
+                Foam::fvm::ddt(U)
+              + Foam::fvm::div(phi, U)
+              - Foam::fvm::laplacian(nu, U)
+            );
+            Foam::solve(UEqn == -Foam::fvc::grad(p));
+
+            Foam::volScalarField rAU("rAU", 1.0/UEqn.A());
+            Foam::volVectorField HbyA("HbyA", rAU*UEqn.H());
+            Foam::surfaceScalarField phiHbyA
+            (
+                "phiHbyA",
+                Foam::fvc::flux(HbyA)
+              + Foam::fvc::interpolate(rAU)*Foam::fvc::ddtCorr(U, phi)
+            );
+            Foam::fvScalarMatrix pEqn
+            (
+                Foam::fvm::laplacian(Foam::fvc::interpolate(rAU), p)
+             == Foam::fvc::div(phiHbyA)
+            );
+            // Constant-pressure gauge in the periodic closed domain.
+            pEqn.setReference(0, 0.0);
+            pEqn.solve();
+            phi = phiHbyA - pEqn.flux();
+            U = HbyA - rAU*Foam::fvc::grad(p);
+            U.correctBoundaryConditions();
+
+            const Foam::volScalarField divPhi(Foam::fvc::div(phi));
+            const Foam::scalar maxDivPhi
+            (
+                Foam::gMax(Foam::mag(divPhi.primitiveField()))
+            );
+            Foam::scalar netBoundaryFlux = 0.0;
+            forAll(phi.boundaryField(), patchI)
+            {
+                const auto& patchFlux = phi.boundaryField()[patchI];
+                forAll(patchFlux, faceI)
+                {
+                    netBoundaryFlux += patchFlux[faceI];
+                }
+            }
+            Foam::reduce(netBoundaryFlux, Foam::sumOp<Foam::scalar>());
+            Foam::Info << "CTEAS_M1B1 max_div_phi=" << maxDivPhi
+                       << " boundary_net_flux=" << netBoundaryFlux
+                       << " kinetic_energy="
+                       << Foam::fvc::domainIntegrate
+                          (
+                              0.5*Foam::magSqr(U)
+                          ).value()
+                       << Foam::nl;
+        }
+
         Foam::fvScalarMatrix cEqn
         (
             Foam::fvm::ddt(c)
@@ -128,7 +206,7 @@ int main(int argc, char* argv[])
     }
 
     Foam::Info << "Completed mode=" << momentumMode
-               << "; full URANS, HT/HTO and soil NOT IMPLEMENTED"
+               << "; URANS, HT/HTO and soil NOT IMPLEMENTED"
                << Foam::nl;
     return 0;
 }
