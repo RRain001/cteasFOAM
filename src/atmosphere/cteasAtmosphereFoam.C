@@ -35,6 +35,64 @@ int main(int argc, char* argv[])
             << exit(FatalError);
     }
 
+    // Optional M1C-0 two-species activity prototype. Default none keeps all
+    // existing dimensionless passive-scalar cases exactly unchanged.
+    const Foam::word activityMode
+    (
+        transportProperties.lookupOrDefault<Foam::word>
+        (
+            "activityMode", "none"
+        )
+    );
+    if (activityMode != "none" && activityMode != "htHto")
+    {
+        FatalErrorInFunction
+            << "Unsupported activityMode: " << activityMode
+            << ". Valid: none, htHto" << exit(FatalError);
+    }
+
+    Foam::dimensionedScalar kOx
+    (
+        "kOx", Foam::dimless/Foam::dimTime, 0.0
+    );
+    Foam::dimensionedScalar lambdaT
+    (
+        "lambdaT", Foam::dimless/Foam::dimTime, 0.0
+    );
+    Foam::dimensionedScalar DHT("DHT", Foam::dimViscosity, 0.0);
+    Foam::dimensionedScalar DHTO("DHTO", Foam::dimViscosity, 0.0);
+    if (activityMode == "htHto")
+    {
+        kOx = Foam::dimensionedScalar
+        (
+            "kOx", Foam::dimless/Foam::dimTime, transportProperties
+        );
+        lambdaT = Foam::dimensionedScalar
+        (
+            "lambdaT", Foam::dimless/Foam::dimTime, transportProperties
+        );
+        DHT = Foam::dimensionedScalar
+        (
+            "DHT", Foam::dimViscosity, transportProperties
+        );
+        DHTO = Foam::dimensionedScalar
+        (
+            "DHTO", Foam::dimViscosity, transportProperties
+        );
+        if (kOx.value() < 0 || lambdaT.value() < 0)
+        {
+            FatalErrorInFunction
+                << "M1C reaction rates kOx and lambdaT must be non-negative"
+                << exit(FatalError);
+        }
+        if (DHT.value() < 0 || DHTO.value() < 0)
+        {
+            FatalErrorInFunction
+                << "M1C diffusivities DHT and DHTO must be non-negative"
+                << exit(FatalError);
+        }
+    }
+
     // Preserve original M1A behavior unless an explicit experimental mode
     // is selected. Do not imply that a solved planar shear velocity is a
     // general incompressible pressure-velocity coupled wind field.
@@ -110,6 +168,47 @@ int main(int argc, char* argv[])
         mesh
     );
 
+    Foam::autoPtr<Foam::volScalarField> htField;
+    Foam::autoPtr<Foam::volScalarField> htoField;
+    if (activityMode == "htHto")
+    {
+        htField.reset
+        (
+            new Foam::volScalarField
+            (
+                Foam::IOobject
+                (
+                    "HT", runTime.timeName(), mesh,
+                    Foam::IOobject::MUST_READ, Foam::IOobject::AUTO_WRITE
+                ),
+                mesh
+            )
+        );
+        htoField.reset
+        (
+            new Foam::volScalarField
+            (
+                Foam::IOobject
+                (
+                    "HTO", runTime.timeName(), mesh,
+                    Foam::IOobject::MUST_READ, Foam::IOobject::AUTO_WRITE
+                ),
+                mesh
+            )
+        );
+        const Foam::dimensionSet activityDims(0, -3, -1, 0, 0, 0, 0);
+        if
+        (
+            htField().dimensions() != activityDims
+         || htoField().dimensions() != activityDims
+        )
+        {
+            FatalErrorInFunction
+                << "M1C HT/HTO fields require Bq/m3 dimensions "
+                << activityDims << exit(FatalError);
+        }
+    }
+
     // Only the pressure-corrected mode reads/writes a physical kinematic
     // pressure [m2/s2]. Older scalar and Couette case files need no p field.
     Foam::autoPtr<Foam::volScalarField> pField;
@@ -129,6 +228,10 @@ int main(int argc, char* argv[])
         );
     }
 
+    if (activityMode == "htHto")
+    {
+        Foam::Info.stream().precision(17);
+    }
     Foam::surfaceScalarField phi("phi", Foam::fvc::flux(U));
     Foam::Info << "cteasFOAM mode=" << momentumMode
                << " D=" << D.value() << Foam::nl
@@ -388,13 +491,73 @@ int main(int argc, char* argv[])
                        << Foam::nl;
         }
 
+        if (activityMode == "htHto")
+        {
+            // A minimal two-species activity transport prototype. HT is
+            // advanced first; the HTO source uses HT at the NEW time level,
+            // matching implicit HT conversion loss in the discrete budget.
+            Foam::volScalarField& HT = htField();
+            Foam::volScalarField& HTO = htoField();
+            const Foam::scalar oldHT =
+                Foam::fvc::domainIntegrate(HT).value();
+            const Foam::scalar oldHTO =
+                Foam::fvc::domainIntegrate(HTO).value();
+            Foam::fvScalarMatrix htEqn
+            (
+                Foam::fvm::ddt(HT)
+              + Foam::fvm::div(phi, HT)
+              - Foam::fvm::laplacian(DHT, HT)
+              + Foam::fvm::Sp(kOx + lambdaT, HT)
+            );
+            htEqn.solve();
+            Foam::fvScalarMatrix htoEqn
+            (
+                Foam::fvm::ddt(HTO)
+              + Foam::fvm::div(phi, HTO)
+              - Foam::fvm::laplacian(DHTO, HTO)
+              + Foam::fvm::Sp(lambdaT, HTO)
+             == kOx*HT
+            );
+            htoEqn.solve();
+            const Foam::scalar newHT =
+                Foam::fvc::domainIntegrate(HT).value();
+            const Foam::scalar newHTO =
+                Foam::fvc::domainIntegrate(HTO).value();
+            Foam::Info << "CTEAS_M1C activity_HT_Bq=" << newHT
+                       << " activity_HTO_Bq=" << newHTO << Foam::nl;
+            if
+            (
+                transportProperties.lookupOrDefault<Foam::Switch>
+                (
+                    "auditClosedActivity", false
+                )
+            )
+            {
+                // Valid only for a truly closed, zero-flux box; do not
+                // interpret these as open-boundary activity budgets.
+                const Foam::scalar dt = runTime.deltaTValue();
+                const Foam::scalar rHT =
+                    newHT - oldHT + dt*(kOx.value()+lambdaT.value())*newHT;
+                const Foam::scalar rHTO =
+                    newHTO - oldHTO
+                  + dt*lambdaT.value()*newHTO - dt*kOx.value()*newHT;
+                const Foam::scalar rTotal =
+                    newHT + newHTO - oldHT - oldHTO
+                  + dt*lambdaT.value()*(newHT + newHTO);
+                Foam::Info << "CTEAS_M1C closed_HT_residual_Bq=" << rHT
+                           << " closed_HTO_residual_Bq=" << rHTO
+                           << " closed_total_residual_Bq=" << rTotal
+                           << Foam::nl;
+            }
+        }
+
         Foam::Info << "CTEAS_M1A integral="
                    << Foam::fvc::domainIntegrate(c).value() << Foam::nl;
         runTime.write();
     }
 
     Foam::Info << "Completed mode=" << momentumMode
-               << "; URANS, HT/HTO and soil NOT IMPLEMENTED"
+               << "; URANS/soil NOT IMPLEMENTED; full HT/HTO physics NOT VALIDATED"
                << Foam::nl;
     return 0;
 }
