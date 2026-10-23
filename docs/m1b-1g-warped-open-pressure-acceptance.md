@@ -130,3 +130,76 @@ this new runner; a successful existing PR check or local Docker scoped full
 must not be relabeled as M1B-1g-1 scientific approval. No external
 experimental observation, turbulence, real atmospheric boundaries,
 HT/HTO or air–soil coupling is validated by the canonical duct.
+
+## M1B-1g-2: time-step self-convergence on the real warped duct
+
+This is a **separate supplemental candidate**, not a replacement for the
+accepted M1B-1g-1 x/z MPI check or an independent scientific review.
+
+The official v2606 test uses one physically identical OpenFOAM 960-cell
+3-D warped duct with the same actual polyMesh vertices, native C, initial
+U/p/c, six boundary patches, fluid viscosity nu=0.05 m²/s, fixed
+kinematic pressures 0.1 and 0 m²/s², four no-slip walls, t_final=0.4 s,
+and the same PISO/nonorthogonal controls. Only deltaT changes:
+0.02, 0.01 and 0.005 s, giving 20/40/80 physical time steps and
+180/360/720 actual pressure solves. Native blockMesh, checkMesh,
+postProcess writeCellCentres, wmake and solver are all real; no
+precomputed output fields may substitute.
+
+**A priori acceptance rules (before the first computation)**:
+
+- Bitwise identical physical mesh and initial U, p, c, C fields; actual
+  warped vertices = 665; official checkMesh Mesh OK, warped
+  nonorthogonality 1–65°, positive minimum volume, skew <3.5.
+- Every dt produces its complete expected number of pressure solves
+  (3 outer PISO × 3 nonorthogonal per physical step), signed boundary
+  fluxes, continuity/energy budgets and scalar inventories. No missing
+  or nonfinite measurements.
+- For *each* dt: absolute cellwise max |div(phi)| ≤1e-7/s; total
+  boundary flux and inlet+outlet flux imbalance ≤1e-7 m³/s; scalar
+  c/volume drift ≤1e-8 m³. Nonzero throughflow q_in <-0.003,
+  q_out >0.003 m³/s, and correct fixed-pressure/no-slip BCs.
+- The independently evaluated transient 3-D square-duct Stokes
+  reference still has max axial velocity discrepancy ≤0.025 m/s;
+  linear pressure discrepancy ≤0.03 m²/s²; transverse U ≤0.02 m/s.
+- Compare full 3-D velocity at the same physical centroids and the
+  final **signed outlet volume flux** at each dt. Define Δ20/10 =
+  ||numerical(dt=.02) - numerical(dt=.01)|| and Δ10/05 similarly;
+  the ratio Δ10/05/Δ20/10 must be ≤0.85 **for both** velocity L∞ and
+  outlet volume flux, with Δ20/10 >1e-11 in the respective units to
+  avoid a false zero-numerator convergence claim. Measure absolute p
+  L∞ differences too (physical fixed pressure fixes the gauge), but
+  do not impose a monotonic p temporal trend in this first-stage test.
+
+The target ratio 0.85 is deliberately less strict than asymptotic
+first-order Euler's ~0.5, accounting for coupled pressure iteration
+effects; it is not to be weakened after observing outputs. Tests
+must disclose any failure, not silently retune. This experiment
+checks temporal **self-convergence at fixed spatial mesh** only;
+it cannot demonstrate spatial grid convergence, continuum solution
+uniqueness, turbulence accuracy, real meteorological inflows or
+experimental scientific validity. URANS, HT/HTO and air–soil coupling
+remain NOT_IMPLEMENTED / NOT_VALIDATED.
+
+Runner: `bash tests/m1b1/run_warped_open_pressure_timestep.sh`.
+
+### Local precommit observation (not independent science acceptance)
+
+Official OpenFOAM v2606 Docker targeted run returned exit 0 on the
+three dt cases after the above thresholds were written, with identical
+physical mesh and initial fields. The observed L∞ successive velocity
+differences were 1.79069615356e-4 and 9.32797613908e-5 m/s,
+giving ratio **0.520913395638**. Signed outlet-flow differences
+were 1.16976573357e-4 and 5.8875156009e-5 m³/s,
+ratio **0.503307237675**. The finest-dt max |div(phi)| was
+7.88750273642e-14 /s. All three cases retained 20/40/80 complete
+budgets, 180/360/720 real p matrix solves and positive throughflow.
+
+The independent Stokes **absolute** U error increased slightly from
+0.00342234987151 at dt=.02 to 0.00362780220956 m/s at dt=.005,
+remaining below 0.025 m/s. This is not a claim of monotonically
+improved total error: changing temporal truncation at a fixed coarse
+mesh can expose spatial, boundary-condition or pressure-iteration
+biases. The physical pressure differences between refinements also
+did not follow an imposed convergence ratio. A mesh-refinement
+study and independent external review remain distinct requirements.
