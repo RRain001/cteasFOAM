@@ -143,3 +143,15 @@ This test uses a dimensionless passive tracer, not Bq/m³ activity
 or any verified HT/HTO physics. The independent review, external
 experimental validation and `science-validated` gate remain
 **NOT_RUN / NOT_APPROVED**; do not merge based on a Python checker.
+
+## M1B-1g-7: positive-diffusivity reproducibility addendum (NOT REVIEWED)
+
+An independent reviewer must also run the new D=0 versus D=0.01
+six-case warped-duct comparison on the exact PR SHA, inspect native
+`cEqn.flux()` for both advective and diffusive contributions, and
+independently verify the signed integrated inventory and physical
+boundary conditions. The declared sensitivity thresholds and passive
+flow non-feedback criteria are in the M1B-1g acceptance document.
+The checker intentionally rejects a falsified D=0.01 input dictionary;
+this is a test of the checker, not independent scientific validation.
+No reviewer approval or external field validation is implied.

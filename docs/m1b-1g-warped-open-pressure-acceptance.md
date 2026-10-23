@@ -489,3 +489,56 @@ HT/HTO chemistry, Bq inventory, soil PDE or nonmatching interface
 exchange in this experiment. The scalar solver is not a production
 radiological transport implementation. Independent non-bot science
 review is still required before merging Draft PR #20.
+
+## M1B-1g-7: positive molecular diffusion in a pressure-driven 3-D duct (PRE-RUN)
+
+**Acceptance thresholds below were fixed before the first numerical execution.**
+Keep the M1B-1g-6 actual warped 960-cell mesh, kinematic pressure endpoints,
+PISO and upwind transport, zero initial dimensionless c, and inletOutlet
+boundary conditions unchanged. Compare the existing D=0 m2/s case with
+**D=0.01 m2/s** on *byte-identical* native mesh and initial U/p/c for each
+of the forward (+0.1), reverse (-0.1) and zero (0) pressure gradients.
+Only the positive scalar diffusivity differs; it must not feed back into
+momentum. The real implicit finite-volume scalar operator includes both
+advection and molecular diffusion, and its `cEqn.flux()` is the signed
+combined advective/diffusive face flux. This is not a radioactive tracer.
+
+A priori numerical criteria:
+
+1. Each of six genuine OpenFOAM v2606 runs completes 20 time steps,
+   180 actual p matrix solves, and 20 signed scalar flux/budget records.
+   All use the same real warped 960-cell mesh (665 moved interior points),
+   the same initial flow fields, and unmodified no-slip walls and pressure
+   boundaries. `checkMesh` must report Mesh OK.
+2. Both D values, all three pressure modes, independently satisfy the
+   previously declared M1B-1g-6 positivity, physical pressure/flow signs,
+   whole-domain scalar inventory and per-step signed budget criteria:
+   |R| <=1e-7 m3, independently recomputed |R| <=2e-6 m3,
+   |div(phi)| <=1e-7/s and no unaccounted wall scalar flux >1e-6 m3/s.
+3. For forward and reverse flow, D=0.01 must produce a physically distinct
+   tracer field: final integral M(D>0)-M(D=0) >= **0.005 m3** and
+   max cellwise |c(D>0)-c(D=0)| >= **0.02**. These are coarse-mesh
+   sensitivity checks, **not** a claim of analytical diffusion accuracy.
+   Final tracer remains in [-1e-9,1+1e-9].
+4. The positive-diffusivity forward xMin and reverse xMax signed inward
+   scalar fluxes must remain <-1e-3 m3/s. D=0.01 must increase the
+   magnitude of active-inlet inward flux by >= **0.005 m3/s** compared
+   with D=0; the inlet concentration is 1 and zero initial c.
+5. The scalar is passive: across the D=0/D=0.01 pair, final native U
+   componentwise L-infinity and absolute p L-infinity must each be
+   <= **1e-10** in their respective units, and each pressure mode's
+   final signed inlet/outlet volume flux must agree to <=1e-10 m3/s.
+   No-flow controls must retain |c|, M, signed tracer flux and U/p
+   <=1e-8 even with D>0 because `inletOutlet` supplies zero-gradient
+   at zero normal flow (no imposed diffusive Dirichlet source).
+6. The independent differential checker must reject an intentionally
+   corrupted positive-D case whose declared transport diffusivity is
+   changed to zero after the run; missing case data, wrong physical
+   mesh/initial state, nonfinite values or inadequate D sensitivity
+   are failures, not skips. Existing M1B-1g-6 residual-corruption
+   negative test remains required.
+
+Run `tests/m1b1/run_open_pressure_tracer_diffusion.sh` in the official
+v2606 Docker image. The original M1B-1g-6 runner and all managed smoke/full
+software gates remain separate and must not be assumed passing for a new
+SHA. **Independent scientific/field review remains NOT_RUN.**
