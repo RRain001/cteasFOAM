@@ -170,45 +170,67 @@ int main(int argc, char* argv[])
             );
             Foam::solve(UEqn == -Foam::fvc::grad(p) + drivingAcceleration);
 
-            Foam::volScalarField rAU("rAU", 1.0/UEqn.A());
-            // Retain explicit body-force acceleration in the corrected
-            // momentum source as well as in the predictor equation.
-            // Without this term PISO projection silently drops the drive.
-            Foam::volVectorField HbyA
-            (
-                "HbyA",
-                Foam::constrainHbyA
+            // Multiple PISO pressure correctors are optional and apply
+            // only to this pressure-corrected laminar mode. Default 1
+            // retains all previously validated Taylor-Green behaviour.
+            const Foam::label nPressureCorrectors =
+                transportProperties.lookupOrDefault<Foam::label>
                 (
-                    rAU*(UEqn.H() + drivingAcceleration), U, p
-                )
-            );
-            Foam::surfaceScalarField phiHbyA
+                    "nPressureCorrectors", 1
+                );
+            if (nPressureCorrectors < 1 || nPressureCorrectors > 12)
+            {
+                FatalErrorInFunction
+                    << "nPressureCorrectors must lie in [1, 12]"
+                    << exit(FatalError);
+            }
+            Foam::volScalarField rAU("rAU", 1.0/UEqn.A());
+            for
             (
-                "phiHbyA",
-                Foam::fvc::flux(HbyA)
-              + Foam::fvc::interpolate(rAU)*Foam::fvc::ddtCorr(U, phi)
-            );
-            // Standard pressure/flux boundary consistency for fixed-U
-            // no-slip walls; invisible in the original fully cyclic TGV.
-            Foam::adjustPhi(phiHbyA, U, p);
-            Foam::constrainPressure(p, U, phiHbyA, rAU);
-            Foam::fvScalarMatrix pEqn
-            (
-                Foam::fvm::laplacian(Foam::fvc::interpolate(rAU), p)
-             == Foam::fvc::div(phiHbyA)
-            );
-            // All ranks MUST enter setReference(): needReference()
-            // performs a coupled/global patch check. Only the master
-            // supplies a valid local gauge cell; other ranks pass -1
-            // (the OpenFOAM refCell convention). No per-rank overfixing
-            // and no unmatched MPI collective.
-            const Foam::label pRefCell =
-                Foam::Pstream::master() ? 0 : -1;
-            pEqn.setReference(pRefCell, 0.0);
-            pEqn.solve();
-            phi = phiHbyA - pEqn.flux();
-            U = HbyA - rAU*Foam::fvc::grad(p);
-            U.correctBoundaryConditions();
+                Foam::label pressureCorrector = 0;
+                pressureCorrector < nPressureCorrectors;
+                ++pressureCorrector
+            )
+            {
+                // Retain explicit body-force acceleration in the corrected
+                // momentum source as well as in the predictor equation.
+                // Without this term PISO projection silently drops the drive.
+                Foam::volVectorField HbyA
+                (
+                    "HbyA",
+                    Foam::constrainHbyA
+                    (
+                        rAU*(UEqn.H() + drivingAcceleration), U, p
+                    )
+                );
+                Foam::surfaceScalarField phiHbyA
+                (
+                    "phiHbyA",
+                    Foam::fvc::flux(HbyA)
+                  + Foam::fvc::interpolate(rAU)*Foam::fvc::ddtCorr(U, phi)
+                );
+                // Standard pressure/flux boundary consistency for fixed-U
+                // no-slip walls; invisible in the original fully cyclic TGV.
+                Foam::adjustPhi(phiHbyA, U, p);
+                Foam::constrainPressure(p, U, phiHbyA, rAU);
+                Foam::fvScalarMatrix pEqn
+                (
+                    Foam::fvm::laplacian(Foam::fvc::interpolate(rAU), p)
+                 == Foam::fvc::div(phiHbyA)
+                );
+                // All ranks MUST enter setReference(): needReference()
+                // performs a coupled/global patch check. Only the master
+                // supplies a valid local gauge cell; other ranks pass -1
+                // (the OpenFOAM refCell convention). No per-rank overfixing
+                // and no unmatched MPI collective.
+                const Foam::label pRefCell =
+                    Foam::Pstream::master() ? 0 : -1;
+                pEqn.setReference(pRefCell, 0.0);
+                pEqn.solve();
+                phi = phiHbyA - pEqn.flux();
+                U = HbyA - rAU*Foam::fvc::grad(p);
+                U.correctBoundaryConditions();
+            }
 
             const Foam::volScalarField divPhi(Foam::fvc::div(phi));
             const Foam::scalar maxDivPhi
