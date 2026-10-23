@@ -13,7 +13,7 @@ done
 set -u
 work=$(mktemp -d /tmp/cteasfoam-warped3d-XXXXXX)
 trap 'rc=$?; if ((rc != 0)); then
- echo "M1B-1f2 nonorthogonal pressure correction regression failed rc=$rc";
+ echo "M1B-1f2 nonorthogonal regression failed rc=$rc";
  for f in "$work"/compile.log "$work"/mesh*.log "$work"/warp*.log "$work"/check*.log "$work"/centres*.log "$work"/seed*.log "$work"/solve*.log; do
   if [[ -f "$f" ]]; then echo "=== $f ==="; tail -140 "$f"; fi
  done
@@ -59,18 +59,25 @@ for n in 8 16; do
  python3 /workspace/tests/m1b1/warp_abc_mesh.py seed "$case_dir" "$n" \
    > "$work/seed$n.log" 2>&1 || { cat "$work/seed$n.log"; exit 27; }
  cat "$work/seed$n.log"
- # Enable two explicit inner non-orthogonal pressure corrections,
- # independently of the three outer PISO correctors.
  sed -i '/^nPressureCorrectors 3;$/a nNonOrthogonalCorrectors 2;' \
    "$case_dir/constant/transportProperties"
- grep -q '^nNonOrthogonalCorrectors 2;
+ grep -q '^nNonOrthogonalCorrectors 2;$' \
+   "$case_dir/constant/transportProperties" || exit 27
+ echo "[M1B-1f2] real three-dimensional nonorthogonal inner PISO n=$n"
  timeout 180s "$FOAM_USER_APPBIN/cteasAtmosphereFoam" -case "$case_dir" \
    > "$work/solve$n.log" 2>&1 || {
      cat "$work/solve$n.log"; exit 28;
    }
- # 20 timesteps x 3 outer PISO x (2+1) nonorth pressure = 180
- # actual pressure matrix solves. Never infer execution from input alone.
- actual_20=$(grep -c '^CTEAS_M1B1 nonorthogonal_correctors=2
+ # Verify actual pressure matrix executions, not merely config text.
+ # 20 timesteps x 3 outer PISO x (2+1) inner nonorth = 180 solves.
+ actual_20=$(grep -c '^CTEAS_M1B1 nonorthogonal_correctors=2$' \
+   "$work/solve$n.log" || true)
+ actual_180=$(grep -c 'Solving for p,' "$work/solve$n.log" || true)
+ echo "M1B-1f2 n=$n actual_nonorth_records=$actual_20 actual_p_solutions=$actual_180"
+ [[ "$actual_20" -eq 20 && "$actual_180" -eq 180 ]] || {
+   echo "FAIL: did not execute 180 actual pressure solves"; exit 29;
+ }
+done
 python3 /workspace/tests/m1b1/check_warped_abc.py \
  "$work/case8" "$work/check8.log" "$work/solve8.log" \
  "$work/case16" "$work/check16.log" "$work/solve16.log" \
@@ -78,40 +85,4 @@ python3 /workspace/tests/m1b1/check_warped_abc.py \
 cat "$work/nonorth_metrics.log"
 python3 /workspace/tests/m1b1/check_nonorth_pressure_consistency.py \
  "$work/nonorth_metrics.log"
-echo "PASS: real pressure nonorthogonal correction loops and warped ABC consistency"
- \
-   "$case_dir/constant/transportProperties" || exit 27
- echo "[M1B-1f2] solve true nonorthogonal pressure-corrected 3D ABC n=$n"
- timeout 180s "$FOAM_USER_APPBIN/cteasAtmosphereFoam" -case "$case_dir" \
-   > "$work/solve$n.log" 2>&1 || {
-     cat "$work/solve$n.log"; exit 28;
-   }
-done
-python3 /workspace/tests/m1b1/check_warped_abc.py \
- "$work/case8" "$work/check8.log" "$work/solve8.log" \
- "$work/case16" "$work/check16.log" "$work/solve16.log"
-echo "PASS: real nonorthogonal 3D geometry and centroid-seeded ABC pressure PDE"
- \
-   "$work/solve$n.log" || true)
- actual_180=$(grep -c 'Solving for p,' "$work/solve$n.log" || true)
- echo "M1B-1f2 actual_nonorth_timestep_records=$actual_20 pressure_solves=$actual_180 n=$n"
- [[ "$actual_20" -eq 20 && "$actual_180" -eq 180 ]] || {
-   echo "FAIL: nonorthogonal inner pressure equations not actually solved"; exit 29;
- }
-done
-python3 /workspace/tests/m1b1/check_warped_abc.py \
- "$work/case8" "$work/check8.log" "$work/solve8.log" \
- "$work/case16" "$work/check16.log" "$work/solve16.log"
-echo "PASS: real nonorthogonal 3D geometry and centroid-seeded ABC pressure PDE"
- \
-   "$case_dir/constant/transportProperties" || exit 27
- echo "[M1B-1f2] solve true nonorthogonal pressure-corrected 3D ABC n=$n"
- timeout 180s "$FOAM_USER_APPBIN/cteasAtmosphereFoam" -case "$case_dir" \
-   > "$work/solve$n.log" 2>&1 || {
-     cat "$work/solve$n.log"; exit 28;
-   }
-done
-python3 /workspace/tests/m1b1/check_warped_abc.py \
- "$work/case8" "$work/check8.log" "$work/solve8.log" \
- "$work/case16" "$work/check16.log" "$work/solve16.log"
-echo "PASS: real nonorthogonal 3D geometry and centroid-seeded ABC pressure PDE"
+echo "PASS: actual inner nonorth pressure correctors and warped ABC scientific gates"
