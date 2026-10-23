@@ -1,16 +1,5 @@
 name: OpenFOAM v2606 build and M1A scalar verification
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/docker-dev-image-probe.yml'
-      - 'src/**'
-      - 'tests/**'
-      - 'cases/**'
-      - 'scripts/**'
-      - 'docker/**'
-      - 'docs/docker-image-audit.md'
-      - 'AGENTS.md'
-      - 'README.md'
   workflow_dispatch:
 
 permissions:

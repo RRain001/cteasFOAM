@@ -31,8 +31,12 @@ On a **native x86-64 Ubuntu Docker host**, execute M0 toolchain checks:
 bash scripts/probe_official_jammy.sh
 ```
 
-The M1A closed-domain analytic diffusion regression is additionally executed
-by GitHub Actions inside the same image. See
+Routine smoke/full and analytic regression run on Ubuntu Docker through
+`/home/lhy/dev/bin/local-ci`. GitHub Actions uses **workflow_dispatch only**
+as of the 2026-10-23 owner decision: opening/updating PRs or pushing code
+does not automatically run cloud CI. To run independent GitHub checks when
+needed, explicitly dispatch `docker-dev-image-probe.yml` on the reviewed
+branch/SHA; inspect its actual run ID and result. See
 `docs/m1a-passive-scalar-acceptance.md` for equation, tolerance and limitations.
 
 ## Validation
