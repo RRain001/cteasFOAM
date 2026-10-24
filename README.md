@@ -69,6 +69,13 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   x refinement (24→32) still changes R3 concentrations 1.89%/1.35%; source shape and
   transport discretization remain confounded. No global convergence or
   independent physics claim; see `docs/m1c-10-x-refinement-findings.md`.
+  M1C-11 separately verifies source-free fully three-dimensional periodic
+  HT/HTO advective-diffusive-reactive trigonometric eigenmodes with analytic
+  continuum reference on native warped 8³/12³/16³ cells, with nonzero
+  Ux/Uy/Uz and zero-flow controls, Bq budgets, and negative tests; see
+  `docs/m1c-11-source-free-3d-analytic-findings.md`. This isolates
+  transport-discretization error from M1C-10 Gaussian source quadrature,
+  without establishing site-scale plume validation or URANS/soil physics.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
