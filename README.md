@@ -9,24 +9,29 @@ M1B-1g distorted three-dimensional nonperiodic fixed-pressure duct is an
 experimental acceptance candidate. M1C-0 adds an **experimental** HT/HTO
 activity reaction/transport branch with a closed-box numerical gate. M1C-1
 adds a separately gated warped-3D periodic HT/HTO advection–diffusion–reaction
-benchmark and finite-volume face-flux activity budget; neither is independent
-scientific validation. Atmospheric URANS, complete HT/HTO
+benchmark and finite-volume face-flux activity budget. M1C-2/3/4 add
+scope-limited MPI and signed pressure-open activity checks, including real
+2-rank x-decomposition and zero-flow controls; none is an independent
+scientific or environmental validation. Atmospheric URANS, complete HT/HTO
 physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALIDATED.**
 
 ## Intended architecture
 
 - `src/atmosphere/`: OpenFOAM executable with prescribed-U passive scalar,
   special Couette and experimentally pressure-corrected **laminar** momentum
-  modes. Optional M1C-0 HT/HTO advection–diffusion–reaction prototype is
-  **not** validated beyond the closed uniform reaction box. URANS closure,
-  realistic HT/HTO parameters and coupled deposition are future milestones.
+  modes. Optional M1C HT/HTO advection–diffusion–reaction prototype has
+  **restricted numerical** verification in closed boxes, periodic warped
+  3-D ducts and open-pressure 3-D ducts, but no independent field validation.
+  URANS closure, realistic HT/HTO parameters and deposition are future milestones.
   Optional `auditActivityFlux true` reports the signed HT/HTO matrix
   face flux (Bq/s) and per-species/combined discrete activity residuals;
   M1C-1 verifies a periodic domain. M1C-3 adds a **separately gated**
   nonperiodic pressure-open HT/HTO inflow/outflow and actual finite-volume
   signed Bq budget benchmark, including flow reversal and zero-flow
-  negative control. It is a numerical research prototype, not independent
-  atmospheric/field validation.
+  negative control. M1C-2 verifies periodic HT/HTO MPI and M1C-4 additionally
+  checks serial/MPI pressure-open species fields, signed fluxes and budgets
+  for all three boundary modes. These are numerical research prototypes, not
+  independent atmospheric/field validation.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
