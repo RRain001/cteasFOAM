@@ -123,6 +123,14 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   zero. This diagnostic rejects unsafe results; it is **not** an FCT/MULES
   positivity-preserving high-resolution method or independent science
   validation. See `docs/m1c-17-positivity-gate-findings.md`.
+  M1C-18 experimentally adds optional `activityConvectionBlend globalPositive`:
+  two conservative native FV Euler solutions (upwind and a named high-order
+  limitedLinear candidate) combined by one all-cell nonnegativity-limited
+  convex coefficient per HT/HTO species, blending their native signed face
+  fluxes with the same coefficient. Only serial prescribed-U cyclic warped
+  meshes are in scope; unsupported MPI/open modes reject. It is **not**
+  local FCT/MULES, proven general positive transport, or external science.
+  See `docs/m1c-18-positivity-flux-blend-findings.md`.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
