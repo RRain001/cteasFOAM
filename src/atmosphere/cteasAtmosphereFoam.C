@@ -503,6 +503,15 @@ int main(int argc, char* argv[])
                 Foam::fvc::domainIntegrate(HT).value();
             const Foam::scalar oldHTO =
                 Foam::fvc::domainIntegrate(HTO).value();
+            // Correct the coupled HT/HTO boundary values (MPI halo exchange)
+            // before assembling a corrected non-orthogonal Laplacian. In
+            // particular, processorCyclic must use the current cell states
+            // when evaluating the explicit snGrad correction. Omitting this
+            // yielded partition-dependent species fields even with fully
+            // converged linear solves; the default diffusion scheme stays
+            // Gauss linear corrected and remains independently configurable.
+            HT.correctBoundaryConditions();
+            HTO.correctBoundaryConditions();
             Foam::fvScalarMatrix htEqn
             (
                 Foam::fvm::ddt(HT)
