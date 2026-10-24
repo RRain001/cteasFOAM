@@ -40,9 +40,14 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   This is **not** a resolved stack or an accident-release model; source-total
   normalization does not establish plume grid convergence. See
   `docs/m1c-5-timed-emission-acceptance.md`,
-  `docs/m1c-5-mpi-emission-addendum.md`, and
-  `docs/m1c-6-localized-gaussian-acceptance.md`. These are numerical research
-  prototypes, not independent atmospheric/field validation.
+  `docs/m1c-5-mpi-emission-addendum.md` and
+  `docs/m1c-6-localized-gaussian-acceptance.md`. M1C-7 independently verifies
+  the same localized timed source inside a genuinely warped 3-D, pressure-open
+  laminar PISO flow, including signed species flux budgets, two-rank MPI and
+  no-release controls; see `docs/m1c-7-open-localized-piso-acceptance.md`.
+  Source + momentum integration is numerically scoped; it does **not**
+  constitute atmospheric URANS, plume grid convergence or independent field
+  validation.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
