@@ -55,6 +55,22 @@ int main(int argc, char* argv[])
             << ". Valid: none, htHto" << exit(FatalError);
     }
 
+    // M1C-17 is a fail-closed diagnostic, not a positivity correction.
+    // Disabled by default to leave all frozen legacy equations unchanged.
+    const Foam::Switch enforceNonnegativeActivity
+    (
+        transportProperties.lookupOrDefault<Foam::Switch>
+        (
+            "enforceNonnegativeActivity", false
+        )
+    );
+    if (enforceNonnegativeActivity && activityMode != "htHto")
+    {
+        FatalErrorInFunction
+            << "enforceNonnegativeActivity requires activityMode htHto"
+            << exit(FatalError);
+    }
+
     Foam::dimensionedScalar kOx
     (
         "kOx", Foam::dimless/Foam::dimTime, 0.0
@@ -564,6 +580,51 @@ int main(int argc, char* argv[])
                << "CTEAS_M1A initial_integral="
                << Foam::fvc::domainIntegrate(c).value() << Foam::nl;
 
+    // Use global extrema on all MPI ranks, including at restart/time zero.
+    // The tolerance is detection-only: NO clipping or activity correction.
+    const auto requireNonnegativeActivity = [&](const char* phase)
+    {
+        if (!enforceNonnegativeActivity) return;
+        // Scalar min/max reductions alone can silently ignore NaN on some
+        // implementations. Count nonfinite cells explicitly, then reduce
+        // before any rank may abort (including on a decomposed mesh).
+        Foam::label htNonfinite = 0, htoNonfinite = 0;
+        const Foam::scalarField& htCells = htField().primitiveField();
+        const Foam::scalarField& htoCells = htoField().primitiveField();
+        forAll(htCells, cellI)
+        {
+            if (!std::isfinite(htCells[cellI])) ++htNonfinite;
+        }
+        forAll(htoCells, cellI)
+        {
+            if (!std::isfinite(htoCells[cellI])) ++htoNonfinite;
+        }
+        Foam::reduce(htNonfinite, Foam::sumOp<Foam::label>());
+        Foam::reduce(htoNonfinite, Foam::sumOp<Foam::label>());
+        const Foam::scalar htMin = Foam::gMin(htField().primitiveField());
+        const Foam::scalar htMax = Foam::gMax(htField().primitiveField());
+        const Foam::scalar htoMin = Foam::gMin(htoField().primitiveField());
+        const Foam::scalar htoMax = Foam::gMax(htoField().primitiveField());
+        const Foam::scalar tol = -1e-8;
+        if (htNonfinite || !std::isfinite(htMin) || !std::isfinite(htMax) || htMin < tol)
+        {
+            FatalErrorInFunction
+                << "CTEAS_M1C_POSITIVITY_FAILURE species=HT phase=" << phase
+                << " minimum_Bq_m3=" << htMin << " threshold_Bq_m3=" << tol
+                << " nonfinite_cell_count=" << htNonfinite
+                << exit(FatalError);
+        }
+        if (htoNonfinite || !std::isfinite(htoMin) || !std::isfinite(htoMax) || htoMin < tol)
+        {
+            FatalErrorInFunction
+                << "CTEAS_M1C_POSITIVITY_FAILURE species=HTO phase=" << phase
+                << " minimum_Bq_m3=" << htoMin << " threshold_Bq_m3=" << tol
+                << " nonfinite_cell_count=" << htoNonfinite
+                << exit(FatalError);
+        }
+    };
+    if (activityMode == "htHto") requireNonnegativeActivity("initial");
+
     while (runTime.loop())
     {
         Foam::Info << "Time = " << runTime.timeName() << Foam::nl;
@@ -895,6 +956,9 @@ int main(int argc, char* argv[])
              == kOx*HT + htoSourceDensity*sourceProfile
             );
             htoEqn.solve();
+            // Fail closed on a genuine unsafe time step BEFORE any output is
+            // accepted. Do not alter HT/HTO fields, Bq budgets or fluxes.
+            requireNonnegativeActivity("postSolve");
             // M1C-16 opt-in per-step global native primitive-cell
             // extrema. No added flux or transport correction. These
             // values do not imply positivity of interpolated faces.
