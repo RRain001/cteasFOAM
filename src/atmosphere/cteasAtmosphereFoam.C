@@ -71,6 +71,32 @@ int main(int argc, char* argv[])
             << exit(FatalError);
     }
 
+    // M1C-18 restricted high/low finite-volume convex blending.
+    // Not face-local FCT or MULES; default preserves the existing solver.
+    const Foam::word activityConvectionBlend
+    (
+        transportProperties.lookupOrDefault<Foam::word>
+        (
+            "activityConvectionBlend", "none"
+        )
+    );
+    if
+    (
+        activityConvectionBlend != "none"
+     && activityConvectionBlend != "globalPositive"
+    )
+    {
+        FatalErrorInFunction
+            << "Unsupported activityConvectionBlend: "
+            << activityConvectionBlend << exit(FatalError);
+    }
+    if (activityConvectionBlend == "globalPositive" && activityMode != "htHto")
+    {
+        FatalErrorInFunction
+            << "globalPositive requires activityMode htHto"
+            << exit(FatalError);
+    }
+
     Foam::dimensionedScalar kOx
     (
         "kOx", Foam::dimless/Foam::dimTime, 0.0
@@ -580,6 +606,28 @@ int main(int argc, char* argv[])
                << "CTEAS_M1A initial_integral="
                << Foam::fvc::domainIntegrate(c).value() << Foam::nl;
 
+    if (activityConvectionBlend == "globalPositive")
+    {
+        // This first research baseline is serial, prescribed-U, cyclic-only.
+        // In particular, do not infer MPI-coupled flux conservation here.
+        if (Foam::Pstream::parRun() || momentumMode != "prescribed")
+        {
+            FatalErrorInFunction
+                << "M1C18_GLOBAL_BLEND_UNSUPPORTED requires serial prescribed flow"
+                << exit(FatalError);
+        }
+        forAll(mesh.boundaryMesh(), patchI)
+        {
+            if (mesh.boundaryMesh()[patchI].type() != "cyclic")
+            {
+                FatalErrorInFunction
+                    << "M1C18_GLOBAL_BLEND_UNSUPPORTED requires cyclic-only boundary; patch="
+                    << mesh.boundaryMesh()[patchI].name()
+                    << exit(FatalError);
+            }
+        }
+    }
+
     // Use global extrema on all MPI ranks, including at restart/time zero.
     // The tolerance is detection-only: NO clipping or activity correction.
     const auto requireNonnegativeActivity = [&](const char* phase)
@@ -938,6 +986,61 @@ int main(int argc, char* argv[])
             // Gauss linear corrected and remains independently configurable.
             HT.correctBoundaryConditions();
             HTO.correctBoundaryConditions();
+            // Convexity proof requires the low solution be nonnegative,
+            // and both FVM equations share old time, source and reaction.
+            const auto blendWithLow = [&](Foam::volScalarField& speciesField,
+                const Foam::scalarField& low, const char* species)->Foam::scalar
+            {
+                const Foam::scalarField& high = speciesField.primitiveField();
+                Foam::scalar alpha = 1.0;
+                bool restricted = false;
+                forAll(low, cellI)
+                {
+                    const Foam::scalar lo = low[cellI];
+                    const Foam::scalar hi = high[cellI];
+                    if (!std::isfinite(lo) || lo < 0 || !std::isfinite(hi))
+                    {
+                        FatalErrorInFunction
+                            << "M1C18_GLOBAL_BLEND_INVALID species=" << species
+                            << " cell=" << cellI << " low=" << lo
+                            << " high=" << hi << exit(FatalError);
+                    }
+                    if (hi < 0)
+                    {
+                        restricted = true;
+                        alpha = Foam::min(alpha, lo/(lo - hi));
+                    }
+                }
+                // Leave a small margin against rounding down to negative.
+                if (restricted) alpha *= (1.0 - 1e-12);
+                if (!std::isfinite(alpha) || alpha < 0 || alpha > 1)
+                {
+                    FatalErrorInFunction
+                        << "M1C18_GLOBAL_BLEND_INVALID alpha=" << alpha
+                        << exit(FatalError);
+                }
+                Foam::scalarField& target = speciesField.primitiveFieldRef();
+                forAll(target, cellI)
+                {
+                    target[cellI] = (1.0-alpha)*low[cellI]
+                                  + alpha*target[cellI];
+                    if (!std::isfinite(target[cellI]) || target[cellI] < -1e-12)
+                    {
+                        FatalErrorInFunction
+                            << "M1C18_GLOBAL_BLEND_INVALID blended species=" << species
+                            << " cell=" << cellI << " value=" << target[cellI]
+                            << exit(FatalError);
+                    }
+                }
+                speciesField.correctBoundaryConditions();
+                Foam::Info << "CTEAS_M1C18 species=" << species
+                           << " global_alpha=" << alpha
+                           << " limited=" << Foam::label(restricted)
+                           << Foam::nl;
+                return alpha;
+            };
+            Foam::autoPtr<Foam::surfaceScalarField> htBlendFlux;
+            Foam::autoPtr<Foam::surfaceScalarField> htoBlendFlux;
             Foam::fvScalarMatrix htEqn
             (
                 Foam::fvm::ddt(HT)
@@ -947,6 +1050,30 @@ int main(int argc, char* argv[])
              == htSourceDensity*sourceProfile
             );
             htEqn.solve();
+            if (activityConvectionBlend == "globalPositive")
+            {
+                const Foam::scalarField lowHT(HT.primitiveField());
+                const Foam::surfaceScalarField lowFlux(htEqn.flux());
+                HT.correctBoundaryConditions();
+                Foam::fvScalarMatrix htHighEqn
+                (
+                    Foam::fvm::ddt(HT)
+                  + Foam::fvm::div(phi, HT, "div(phi,HTHigh)")
+                  - Foam::fvm::laplacian(DHT, HT)
+                  + Foam::fvm::Sp(kOx + lambdaT, HT)
+                 == htSourceDensity*sourceProfile
+                );
+                htHighEqn.solve();
+                const Foam::surfaceScalarField highFlux(htHighEqn.flux());
+                const Foam::scalar alpha = blendWithLow(HT,lowHT,"HT");
+                htBlendFlux.reset
+                (
+                    new Foam::surfaceScalarField
+                    (
+                        (1.0-alpha)*lowFlux + alpha*highFlux
+                    )
+                );
+            }
             Foam::fvScalarMatrix htoEqn
             (
                 Foam::fvm::ddt(HTO)
@@ -956,6 +1083,30 @@ int main(int argc, char* argv[])
              == kOx*HT + htoSourceDensity*sourceProfile
             );
             htoEqn.solve();
+            if (activityConvectionBlend == "globalPositive")
+            {
+                const Foam::scalarField lowHTO(HTO.primitiveField());
+                const Foam::surfaceScalarField lowFlux(htoEqn.flux());
+                HTO.correctBoundaryConditions();
+                Foam::fvScalarMatrix htoHighEqn
+                (
+                    Foam::fvm::ddt(HTO)
+                  + Foam::fvm::div(phi, HTO, "div(phi,HTOHigh)")
+                  - Foam::fvm::laplacian(DHTO, HTO)
+                  + Foam::fvm::Sp(lambdaT, HTO)
+                 == kOx*HT + htoSourceDensity*sourceProfile
+                );
+                htoHighEqn.solve();
+                const Foam::surfaceScalarField highFlux(htoHighEqn.flux());
+                const Foam::scalar alpha = blendWithLow(HTO,lowHTO,"HTO");
+                htoBlendFlux.reset
+                (
+                    new Foam::surfaceScalarField
+                    (
+                        (1.0-alpha)*lowFlux + alpha*highFlux
+                    )
+                );
+            }
             // Fail closed on a genuine unsafe time step BEFORE any output is
             // accepted. Do not alter HT/HTO fields, Bq budgets or fluxes.
             requireNonnegativeActivity("postSolve");
@@ -1063,8 +1214,13 @@ int main(int argc, char* argv[])
                     Foam::reduce(right, Foam::sumOp<Foam::scalar>());
                     return net;
                 };
-                const Foam::surfaceScalarField htFlux(htEqn.flux());
-                const Foam::surfaceScalarField htoFlux(htoEqn.flux());
+                Foam::surfaceScalarField htFlux(htEqn.flux());
+                Foam::surfaceScalarField htoFlux(htoEqn.flux());
+                if (activityConvectionBlend == "globalPositive")
+                {
+                    htFlux = htBlendFlux();
+                    htoFlux = htoBlendFlux();
+                }
                 Foam::scalar htLeft = 0.0, htRight = 0.0;
                 Foam::scalar htoLeft = 0.0, htoRight = 0.0;
                 const Foam::scalar htNet =

@@ -133,7 +133,10 @@ def weights(target,centres,lookup,n):
         fail("native nonorthogonal 3-D physical affine interpolation failed")
     return anchors,interpolate
 
-def audit(case,n):
+def audit(case,n,solves_per_species_step=1):
+    # M1C-18 optional dual low/high numerical solves; legacy default remains 1.
+    if solves_per_species_step not in (1,2):
+        fail("unsupported native species solve count")
     if n not in (8,12,16,24):
         fail("unsupported frozen mesh")
     centres,volumes,lookup=grid(case,n)
@@ -183,7 +186,8 @@ def audit(case,n):
         fail("native every-step Gaussian activity evidence absent")
     if any(abs(q-.005*i)>2e-12 for i,q in enumerate(times,1)):
         fail("native real simulation clock incorrect")
-    if any(len(re.findall(r"Solving for "+sp+r",",s))!=80 for sp in ("HT","HTO","c")):
+    if any(len(re.findall(r"Solving for "+sp+r",",s))!=(80 if sp=="c" else 80*solves_per_species_step)
+           for sp in ("HT","HTO","c")):
         fail("native C++ HT/HTO/passive 80-step solve incomplete")
     prev=[0.,0.]
     totals=[0.,0.]
