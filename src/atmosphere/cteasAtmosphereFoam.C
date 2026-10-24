@@ -95,9 +95,9 @@ int main(int argc, char* argv[])
         }
     }
 
-    // Optional M1C-5 finite-time *uniform-volume* activity injection.
-    // Both emission rates are integrated Bq/s (activity dimensions s^-2),
-    // not spatial source densities. This is NOT a point-stack model.
+    // Optional M1C-5 finite-time Bq/s injection and M1C-6 normalized
+    // 3-D spatial kernel. Emission rates are integrated Bq/s (s^-2), not
+    // spatial source densities. Neither mode is a physical stack model.
     const Foam::dimensionSet emissionDims(0, 0, -2, 0, 0, 0, 0);
     Foam::dimensionedScalar sourceHTRate
     (
@@ -113,6 +113,41 @@ int main(int argc, char* argv[])
         activityMode == "htHto"
      && (transportProperties.found("sourceHT_Bq_s")
       || transportProperties.found("sourceHTO_Bq_s"));
+    const Foam::word sourceShape
+    (
+        transportProperties.lookupOrDefault<Foam::word>
+        (
+            "sourceShape", "uniform"
+        )
+    );
+    if
+    (
+        transportProperties.found("sourceShape") && !hasActivitySource
+    )
+    {
+        FatalErrorInFunction
+            << "M1C sourceShape requires configured Bq/s emission rates"
+            << exit(FatalError);
+    }
+    if (sourceShape != "uniform" && sourceShape != "gaussian")
+    {
+        FatalErrorInFunction
+            << "M1C unsupported sourceShape: " << sourceShape
+            << ". Valid: uniform, gaussian" << exit(FatalError);
+    }
+    // Dimensionless spatial profile whose volume-weighted mean is 1.
+    // Multiplying the existing rate/domain-volume density by this field
+    // conserves exactly the requested Bq/s across native MPI cells.
+    Foam::volScalarField sourceProfile
+    (
+        Foam::IOobject
+        (
+            "sourceProfile", runTime.timeName(), mesh,
+            Foam::IOobject::NO_READ, Foam::IOobject::NO_WRITE
+        ),
+        mesh,
+        Foam::dimensionedScalar("one", Foam::dimless, 1.0)
+    );
     Foam::scalar sourceDomainVolume = 1.0;
     if (hasActivitySource)
     {
@@ -172,6 +207,64 @@ int main(int argc, char* argv[])
             FatalErrorInFunction
                 << "M1C activity emission requires positive finite volume"
                 << exit(FatalError);
+        }
+        if (sourceShape == "gaussian")
+        {
+            if
+            (
+                !transportProperties.found("sourceCenter")
+             || !transportProperties.found("sourceSigma")
+            )
+            {
+                FatalErrorInFunction
+                    << "M1C gaussian source requires sourceCenter and sourceSigma"
+                    << exit(FatalError);
+            }
+            const Foam::dimensionedVector sourceCenter
+            (
+                "sourceCenter", Foam::dimLength, transportProperties
+            );
+            const Foam::dimensionedScalar sourceSigma
+            (
+                "sourceSigma", Foam::dimLength, transportProperties
+            );
+            const Foam::vector center = sourceCenter.value();
+            const Foam::scalar sigma = sourceSigma.value();
+            if
+            (
+                !std::isfinite(center.x())
+             || !std::isfinite(center.y())
+             || !std::isfinite(center.z())
+             || !std::isfinite(sigma) || sigma <= 0
+            )
+            {
+                FatalErrorInFunction
+                    << "M1C gaussian source requires finite center and positive sigma"
+                    << exit(FatalError);
+            }
+            forAll(sourceProfile.primitiveField(), cellI)
+            {
+                sourceProfile.primitiveFieldRef()[cellI] = std::exp
+                (
+                    -Foam::magSqr(mesh.C()[cellI] - center)/(2*sigma*sigma)
+                );
+            }
+            const Foam::scalar weightedVolume = Foam::gSum
+            (
+                mesh.V()*sourceProfile.primitiveField()
+            );
+            if (!std::isfinite(weightedVolume) || weightedVolume <= 0)
+            {
+                FatalErrorInFunction
+                    << "M1C gaussian source has zero/nonfinite global support"
+                    << exit(FatalError);
+            }
+            sourceProfile.primitiveFieldRef() *=
+                sourceDomainVolume/weightedVolume;
+            Foam::Info << "CTEAS_M1C sourceShape=gaussian"
+                       << " weighted_volume_m3=" << weightedVolume
+                       << " domain_volume_m3=" << sourceDomainVolume
+                       << Foam::nl;
         }
     }
 
@@ -639,7 +732,7 @@ int main(int argc, char* argv[])
               + Foam::fvm::div(phi, HT)
               - Foam::fvm::laplacian(DHT, HT)
               + Foam::fvm::Sp(kOx + lambdaT, HT)
-             == htSourceDensity
+             == htSourceDensity*sourceProfile
             );
             htEqn.solve();
             Foam::fvScalarMatrix htoEqn
@@ -648,7 +741,7 @@ int main(int argc, char* argv[])
               + Foam::fvm::div(phi, HTO)
               - Foam::fvm::laplacian(DHTO, HTO)
               + Foam::fvm::Sp(lambdaT, HTO)
-             == kOx*HT + htoSourceDensity
+             == kOx*HT + htoSourceDensity*sourceProfile
             );
             htoEqn.solve();
             const Foam::scalar newHT =

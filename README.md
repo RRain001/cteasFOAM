@@ -33,10 +33,15 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   for all three boundary modes. M1C-5 introduces optional piecewise-constant
   total HT/HTO release rates (`sourceHT_Bq_s`, `sourceHTO_Bq_s`) integrated
   over the exact overlap of each Euler time step and the dimensioned
-  [`sourceStart`, `sourceEnd`) window. The current rate is uniformly distributed
-  over the whole actual domain volume; it is **not** a spatially resolved
-  stack or accident-release source. See `docs/m1c-5-timed-emission-acceptance.md`
-  and `docs/m1c-5-mpi-emission-addendum.md`. These are numerical research
+  [`sourceStart`, `sourceEnd`) window. M1C-5 defaults to a uniform volumetric
+  rate. M1C-6 optionally selects `sourceShape gaussian` with dimensioned
+  `sourceCenter` and `sourceSigma`, distributing Bq/s across actual native
+  cell volumes by a globally MPI-normalized 3-D Gaussian spatial kernel.
+  This is **not** a resolved stack or an accident-release model; source-total
+  normalization does not establish plume grid convergence. See
+  `docs/m1c-5-timed-emission-acceptance.md`,
+  `docs/m1c-5-mpi-emission-addendum.md`, and
+  `docs/m1c-6-localized-gaussian-acceptance.md`. These are numerical research
   prototypes, not independent atmospheric/field validation.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
