@@ -8,6 +8,7 @@
 #include "adjustPhi.H"
 #include "constrainPressure.H"
 #include "processorCyclicPolyPatch.H"
+#include <cmath>
 
 int main(int argc, char* argv[])
 {
@@ -90,6 +91,86 @@ int main(int argc, char* argv[])
         {
             FatalErrorInFunction
                 << "M1C diffusivities DHT and DHTO must be non-negative"
+                << exit(FatalError);
+        }
+    }
+
+    // Optional M1C-5 finite-time *uniform-volume* activity injection.
+    // Both emission rates are integrated Bq/s (activity dimensions s^-2),
+    // not spatial source densities. This is NOT a point-stack model.
+    const Foam::dimensionSet emissionDims(0, 0, -2, 0, 0, 0, 0);
+    Foam::dimensionedScalar sourceHTRate
+    (
+        "sourceHT_Bq_s", emissionDims, 0.0
+    );
+    Foam::dimensionedScalar sourceHTORate
+    (
+        "sourceHTO_Bq_s", emissionDims, 0.0
+    );
+    Foam::dimensionedScalar sourceStart("sourceStart", Foam::dimTime, 0.0);
+    Foam::dimensionedScalar sourceEnd("sourceEnd", Foam::dimTime, 0.0);
+    const bool hasActivitySource =
+        activityMode == "htHto"
+     && (transportProperties.found("sourceHT_Bq_s")
+      || transportProperties.found("sourceHTO_Bq_s"));
+    Foam::scalar sourceDomainVolume = 1.0;
+    if (hasActivitySource)
+    {
+        if
+        (
+            !transportProperties.found("sourceStart")
+         || !transportProperties.found("sourceEnd")
+        )
+        {
+            FatalErrorInFunction
+                << "M1C activity emission requires sourceStart and sourceEnd"
+                << exit(FatalError);
+        }
+        if (transportProperties.found("sourceHT_Bq_s"))
+        {
+            sourceHTRate = Foam::dimensionedScalar
+            (
+                "sourceHT_Bq_s", emissionDims, transportProperties
+            );
+        }
+        if (transportProperties.found("sourceHTO_Bq_s"))
+        {
+            sourceHTORate = Foam::dimensionedScalar
+            (
+                "sourceHTO_Bq_s", emissionDims, transportProperties
+            );
+        }
+        sourceStart = Foam::dimensionedScalar
+        (
+            "sourceStart", Foam::dimTime, transportProperties
+        );
+        sourceEnd = Foam::dimensionedScalar
+        (
+            "sourceEnd", Foam::dimTime, transportProperties
+        );
+        if
+        (
+            !std::isfinite(sourceHTRate.value())
+         || !std::isfinite(sourceHTORate.value())
+         || !std::isfinite(sourceStart.value())
+         || !std::isfinite(sourceEnd.value())
+         || sourceHTRate.value() < 0 || sourceHTORate.value() < 0
+         || sourceStart.value() < 0
+         || sourceEnd.value() <= sourceStart.value()
+        )
+        {
+            FatalErrorInFunction
+                << "M1C activity emission requires nonnegative finite Bq/s "
+                << "rates and finite sourceEnd > sourceStart >= 0"
+                << exit(FatalError);
+        }
+        // gSum is global across all MPI subdomains, so the summed emission
+        // over the physical domain is exactly the prescribed total Bq/s.
+        sourceDomainVolume = Foam::gSum(mesh.V());
+        if (!std::isfinite(sourceDomainVolume) || sourceDomainVolume <= 0)
+        {
+            FatalErrorInFunction
+                << "M1C activity emission requires positive finite volume"
                 << exit(FatalError);
         }
     }
@@ -503,6 +584,46 @@ int main(int argc, char* argv[])
                 Foam::fvc::domainIntegrate(HT).value();
             const Foam::scalar oldHTO =
                 Foam::fvc::domainIntegrate(HTO).value();
+            // Integrate a finite-duration emission over the actual Euler
+            // time-step overlap, so straddling sourceStart/sourceEnd does not
+            // alter the intended total released activity. Uniform physical
+            // volume is explicitly a prototype assumption, not stack CFD.
+            const Foam::scalar dtSource = runTime.deltaTValue();
+            const Foam::scalar tNew = runTime.value();
+            const Foam::scalar overlapSeconds = hasActivitySource
+              ? Foam::max
+                (
+                    Foam::scalar(0),
+                    Foam::min(tNew, sourceEnd.value())
+                  - Foam::max(tNew - dtSource, sourceStart.value())
+                )
+              : Foam::scalar(0);
+            const Foam::scalar activeFraction = overlapSeconds/dtSource;
+            const Foam::scalar injectedHT =
+                sourceHTRate.value()*overlapSeconds;
+            const Foam::scalar injectedHTO =
+                sourceHTORate.value()*overlapSeconds;
+            const Foam::dimensionSet sourceDensityDims
+            (
+                0, -3, -2, 0, 0, 0, 0
+            );
+            const Foam::dimensionedScalar htSourceDensity
+            (
+                "htSourceDensity", sourceDensityDims,
+                sourceHTRate.value()*activeFraction/sourceDomainVolume
+            );
+            const Foam::dimensionedScalar htoSourceDensity
+            (
+                "htoSourceDensity", sourceDensityDims,
+                sourceHTORate.value()*activeFraction/sourceDomainVolume
+            );
+            if (hasActivitySource)
+            {
+                Foam::Info << "CTEAS_M1C emitted_HT_Bq=" << injectedHT
+                           << " emitted_HTO_Bq=" << injectedHTO
+                           << " source_overlap_s=" << overlapSeconds
+                           << Foam::nl;
+            }
             // Correct the coupled HT/HTO boundary values (MPI halo exchange)
             // before assembling a corrected non-orthogonal Laplacian. In
             // particular, processorCyclic must use the current cell states
@@ -518,6 +639,7 @@ int main(int argc, char* argv[])
               + Foam::fvm::div(phi, HT)
               - Foam::fvm::laplacian(DHT, HT)
               + Foam::fvm::Sp(kOx + lambdaT, HT)
+             == htSourceDensity
             );
             htEqn.solve();
             Foam::fvScalarMatrix htoEqn
@@ -526,7 +648,7 @@ int main(int argc, char* argv[])
               + Foam::fvm::div(phi, HTO)
               - Foam::fvm::laplacian(DHTO, HTO)
               + Foam::fvm::Sp(lambdaT, HTO)
-             == kOx*HT
+             == kOx*HT + htoSourceDensity
             );
             htoEqn.solve();
             const Foam::scalar newHT =
@@ -613,13 +735,16 @@ int main(int argc, char* argv[])
                 const Foam::scalar dt = runTime.deltaTValue();
                 const Foam::scalar htResidual =
                     newHT-oldHT + dt*htNet
-                  + dt*(kOx.value()+lambdaT.value())*newHT;
+                  + dt*(kOx.value()+lambdaT.value())*newHT
+                  - injectedHT;
                 const Foam::scalar htoResidual =
                     newHTO-oldHTO + dt*htoNet
-                  + dt*lambdaT.value()*newHTO-dt*kOx.value()*newHT;
+                  + dt*lambdaT.value()*newHTO-dt*kOx.value()*newHT
+                  - injectedHTO;
                 const Foam::scalar totalResidual =
                     newHT+newHTO-oldHT-oldHTO + dt*(htNet+htoNet)
-                  + dt*lambdaT.value()*(newHT+newHTO);
+                  + dt*lambdaT.value()*(newHT+newHTO)
+                  - injectedHT-injectedHTO;
                 Foam::Info << "CTEAS_M1C flux_HT_xMin_Bq_s=" << htLeft
                            << " flux_HT_xMax_Bq_s=" << htRight
                            << " flux_HT_net_Bq_s=" << htNet
@@ -644,13 +769,16 @@ int main(int argc, char* argv[])
                 // interpret these as open-boundary activity budgets.
                 const Foam::scalar dt = runTime.deltaTValue();
                 const Foam::scalar rHT =
-                    newHT - oldHT + dt*(kOx.value()+lambdaT.value())*newHT;
+                    newHT - oldHT + dt*(kOx.value()+lambdaT.value())*newHT
+                  - injectedHT;
                 const Foam::scalar rHTO =
                     newHTO - oldHTO
-                  + dt*lambdaT.value()*newHTO - dt*kOx.value()*newHT;
+                  + dt*lambdaT.value()*newHTO - dt*kOx.value()*newHT
+                  - injectedHTO;
                 const Foam::scalar rTotal =
                     newHT + newHTO - oldHT - oldHTO
-                  + dt*lambdaT.value()*(newHT + newHTO);
+                  + dt*lambdaT.value()*(newHT + newHTO)
+                  - injectedHT-injectedHTO;
                 Foam::Info << "CTEAS_M1C closed_HT_residual_Bq=" << rHT
                            << " closed_HTO_residual_Bq=" << rHTO
                            << " closed_total_residual_Bq=" << rTotal

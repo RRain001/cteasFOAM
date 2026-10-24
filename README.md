@@ -30,8 +30,14 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   signed Bq budget benchmark, including flow reversal and zero-flow
   negative control. M1C-2 verifies periodic HT/HTO MPI and M1C-4 additionally
   checks serial/MPI pressure-open species fields, signed fluxes and budgets
-  for all three boundary modes. These are numerical research prototypes, not
-  independent atmospheric/field validation.
+  for all three boundary modes. M1C-5 introduces optional piecewise-constant
+  total HT/HTO release rates (`sourceHT_Bq_s`, `sourceHTO_Bq_s`) integrated
+  over the exact overlap of each Euler time step and the dimensioned
+  [`sourceStart`, `sourceEnd`) window. The current rate is uniformly distributed
+  over the whole actual domain volume; it is **not** a spatially resolved
+  stack or accident-release source. See `docs/m1c-5-timed-emission-acceptance.md`
+  and `docs/m1c-5-mpi-emission-addendum.md`. These are numerical research
+  prototypes, not independent atmospheric/field validation.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
