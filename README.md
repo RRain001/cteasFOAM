@@ -114,6 +114,15 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   test only PASSes when the physical candidate is flagged REJECTED; see
   `docs/m1c-16-convection-scheme-findings.md`. No real plume/URANS/soil
   science is accepted.
+  M1C-17 adds an explicitly opt-in `enforceNonnegativeActivity true`
+  fail-closed safety gate for initial and post-solve native HT/HTO primitive-cell
+  extrema, with no clipping, flux adjustment or change to the default solver.
+  An actual v2606 8³ warped-grid Gaussian test preserves exactly identical
+  upwind HT/HTO fields and budgets with the gate on/off, but aborts genuine
+  `limitedLinear 1` negative HT at step 15 and negative initial HT at time
+  zero. This diagnostic rejects unsafe results; it is **not** an FCT/MULES
+  positivity-preserving high-resolution method or independent science
+  validation. See `docs/m1c-17-positivity-gate-findings.md`.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
