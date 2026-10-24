@@ -43,7 +43,20 @@ def get(case,mode):
     if len(pointrows)!=expected:fail(f"{mode} native polyMesh points mismatch")
     moved=0
     for x,y,z in pointrows:
-        base_x=round(x*nx)/nx
+        # Invert the exact frozen x-only interior warp before recovering the
+        # original lattice point. Rounding *warped* x fails for nx >= 16
+        # once physical displacement exceeds half a nominal cell; no
+        # physical/geometric tolerance is changed by this correction.
+        amp=.04*math.sin(math.pi*y)*math.sin(math.pi*z)
+        lo,hi=max(0.,x-.04),min(1.,x)
+        for _ in range(55):
+            mid=(lo+hi)/2
+            if mid+amp*math.sin(math.pi*mid)<x:
+                lo=mid
+            else:
+                hi=mid
+        x0=(lo+hi)/2
+        base_x=round(x0*nx)/nx
         base_y=round(y*ny)/ny
         base_z=round(z*nz)/nz
         if abs(y-base_y)>1e-10 or abs(z-base_z)>1e-10:

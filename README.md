@@ -62,6 +62,13 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   while R3 spatial non-monotonicity persists across all tested averaging
   widths; see `docs/m1c-9-receiver-diagnostics-acceptance.md`. No physical
   cause is uniquely identified, and scientific validation remains NOT_RUN.
+  M1C-10 independently refines x-only cells 8→12→16→24→32 with y/z fixed,
+  checks the truncated-cube Gaussian source centroid/second moments against
+  analytic integrals, and retains exact native HT/HTO activity conservation.
+  R3 HT/HTO show a limited decreasing-difference trend, but the final
+  x refinement (24→32) still changes R3 concentrations 1.89%/1.35%; source shape and
+  transport discretization remain confounded. No global convergence or
+  independent physics claim; see `docs/m1c-10-x-refinement-findings.md`.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
