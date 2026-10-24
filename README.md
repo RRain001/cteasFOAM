@@ -89,6 +89,12 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   receptor diagnostics. It does not establish whole-field or fixed-point
   mesh convergence, or real stack/weather/URANS/soil physics; see
   `docs/m1c-13-local-gaussian-green-findings.md`.
+  M1C-14 compares fixed physical R1/R2/R3 points via native warped-centre
+  hexahedral trilinear interpolation, 3D mesh 8³→12³→16³→24³, affine
+  reconstruction, split observation error and independent Gaussian Green
+  response. R2 HT still differs 33.07% at 24³, and R3 HT is nonmonotone;
+  no full grid independence or realistic source/soil validation is claimed.
+  See `docs/m1c-14-fixed-receptor-findings.md` and geometry erratum.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange

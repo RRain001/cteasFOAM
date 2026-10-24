@@ -1,0 +1,7 @@
+# M1C-14 pre-fix geometry erratum after initial native FAIL
+
+The first real 8³ OpenFOAM M1C-14 run exited FAIL at the frozen assumption that volume-weighted cell centres of warped hexahedra must have exactly y=(j+0.5)/N and z=(k+0.5)/N to 1e-9 m. This was a mathematical error in the *observation operator geometry model*, not a failure of source/transport nor grounds to weaken analytical concentration thresholds.
+
+The correct method groups real cell centres into structured logical (i,j,k) columns by their approximate logical coordinate, with a separately enforced physical grouping deviation bound 0.01 m, but **never treats the nominal centre as the actual physical sampling point**. The exact physical coordinates of the eight distinct native OpenFOAM volume centres define the interpolation hexahedron. Solve its **full nonorthogonal trilinear inverse mapping** with Newton iteration, positive/in-range reference weights and exact coordinate residual <=1e-9 m. Retain the original **1e-9 affine manufactured field agreement and 1e-7 Bq/m³ independent Green error decomposition**, all original source/geometry/budget evidence and error bounds. Tighten/retire physical-index tolerance later only after inspecting actual native centroid deviations; do not relax transport/concentration tests. Corrupting one real centre y by +0.1 m must still fail native logical-column geometry.
+
+Do not count initial geometric FAIL as a PASS. This erratum is committed before any checker correction or rerun, with a separate documented evidence trail.
