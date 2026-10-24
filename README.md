@@ -76,6 +76,12 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   `docs/m1c-11-source-free-3d-analytic-findings.md`. This isolates
   transport-discretization error from M1C-10 Gaussian source quadrature,
   without establishing site-scale plume validation or URANS/soil physics.
+  M1C-12 pairs native source-free/finite-duration uniform-source three-dimensional
+  analytic HT/HTO transport fields on 8³/12³/16³ grids, verifying partial-step
+  emissions, exact 3840/768 Bq totals, finite-step two-species reactions,
+  time-order 0.01/0.005/0.0025 s and negative controls with no C++ changes.
+  It does not validate spatially localized Gaussian or real-world stack release;
+  see `docs/m1c-12-pulsed-analytic-findings.md`.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
