@@ -139,6 +139,15 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   2-rank periodic MPI and open nonperiodic duct benchmarks are documented
   in `docs/m1c-19-local-fct-findings.md`. Independent environmental/URANS,
   soil, real air-soil interface and non-Bot science remain NOT_RUN.
+  M1C-20 adds genuine y/z 2-rank and xy 4-rank decomposition validation,
+  reversed xMax inletOutlet native Bq checks, and time-step robustness probes.
+  **Important negative finding:** `faceMules` with the existing corrected
+  nonorthogonal diffusion becomes low-state HT negative at dt=0.0025 s;
+  the solver correctly aborts. Separate uncorrected two-point diffusion
+  tests at dt=0.0025/0.01 s pass, but are NOT equivalent diffusion schemes
+  or proof of corrected-scheme time robustness. The original frozen
+  time-step-only gate remains PARTIAL. See
+  `docs/m1c-20-numerical-robustness-findings.md`.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
