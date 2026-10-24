@@ -54,6 +54,14 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   refinement axes, but several R2/R3 results remain non-monotonic;
   see `docs/m1c-8-convergence-acceptance.md`. This is **not** a global
   mesh-independent, meteorological or externally validated result.
+  M1C-9 independently repeats the M1C-8 five native cases and three
+  directional X/Y/Z refinement cases; it audits receptor averaging widths
+  0.05/0.10/0.15 m and ±0.025 m streamwise receptor shifts. The original
+  four non-monotone receiver metrics are preserved against independent
+  prior-SHA evidence. The R2 anomaly is observation-operator-sensitive,
+  while R3 spatial non-monotonicity persists across all tested averaging
+  widths; see `docs/m1c-9-receiver-diagnostics-acceptance.md`. No physical
+  cause is uniquely identified, and scientific validation remains NOT_RUN.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange

@@ -1,0 +1,64 @@
+{
+  "flags": {
+    "space": {
+      "R1_HTO_Bq_m3": true,
+      "R1_HT_Bq_m3": true,
+      "R2_HTO_Bq_m3": false,
+      "R2_HT_Bq_m3": true,
+      "R3_HTO_Bq_m3": false,
+      "R3_HT_Bq_m3": false
+    },
+    "time": {
+      "R1_HTO_Bq_m3": true,
+      "R1_HT_Bq_m3": true,
+      "R2_HTO_Bq_m3": true,
+      "R2_HT_Bq_m3": false,
+      "R3_HTO_Bq_m3": true,
+      "R3_HT_Bq_m3": true
+    }
+  },
+  "receptors": {
+    "baseline": {
+      "R1_HTO_Bq_m3": 13216.106085527706,
+      "R1_HT_Bq_m3": 44747.054784821,
+      "R2_HTO_Bq_m3": 3475.261776565555,
+      "R2_HT_Bq_m3": 9973.351101806316,
+      "R3_HTO_Bq_m3": 1296.7816124104343,
+      "R3_HT_Bq_m3": 3217.2940515290643
+    },
+    "space_hi": {
+      "R1_HTO_Bq_m3": 13171.799788542143,
+      "R1_HT_Bq_m3": 44688.0424507239,
+      "R2_HTO_Bq_m3": 3465.617779115384,
+      "R2_HT_Bq_m3": 9882.742664326723,
+      "R3_HTO_Bq_m3": 1203.3316005328943,
+      "R3_HT_Bq_m3": 2914.084649608171
+    },
+    "space_lo": {
+      "R1_HTO_Bq_m3": 12896.666136020636,
+      "R1_HT_Bq_m3": 43630.97123943716,
+      "R2_HTO_Bq_m3": 3483.6372210229583,
+      "R2_HT_Bq_m3": 10130.744365503539,
+      "R3_HTO_Bq_m3": 1376.1621188879726,
+      "R3_HT_Bq_m3": 3505.4408808297385
+    },
+    "time_hi": {
+      "R1_HTO_Bq_m3": 13214.612929697172,
+      "R1_HT_Bq_m3": 44907.66128979552,
+      "R2_HTO_Bq_m3": 3445.6149264086876,
+      "R2_HT_Bq_m3": 9968.862896402432,
+      "R3_HTO_Bq_m3": 1270.8906319024886,
+      "R3_HT_Bq_m3": 3193.5426138391813
+    },
+    "time_lo": {
+      "R1_HTO_Bq_m3": 13213.596376504694,
+      "R1_HT_Bq_m3": 44456.087182467454,
+      "R2_HTO_Bq_m3": 3527.9033535120398,
+      "R2_HT_Bq_m3": 9976.151583483794,
+      "R3_HTO_Bq_m3": 1344.8745650701105,
+      "R3_HT_Bq_m3": 3258.6691327201156
+    }
+  },
+  "source_report": "M1C-8 official exact-SHA native OpenFOAM v2606 Docker independent five-run report",
+  "source_sha": "68370fb4483608f96ceb7073f4fe8ea69ec0dc59"
+}
