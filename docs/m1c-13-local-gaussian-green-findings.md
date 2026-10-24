@@ -1,0 +1,21 @@
+# M1C-13 findings: localized 3D Gaussian forcing compared with a distinct periodic Green-function reference
+
+The acceptance was committed separately BEFORE writing any tests (02bc73bad1e8397b9302e17e907609c55eab1140). No C++ physical solver change. These are development-only observations until candidate clean HEAD exact-v2606 native and full software tests are independently rerun.
+
+Four real OpenCFD v2606 3D warped periodic native C++ runs: grids 8³/12³/16³ at dt=.005s plus 8³ at dt=.01s; t=.4s. Source center (.42,.55,.50)m, sigma=.08m, constant wind U=(1,.05,.03)m/s, HT 60000Bq/s, HTO 12000Bq/s during [.073,.137]s, totals 3840/768 Bq, k=.4/s, synthetic lambda=.2/s, DHT=.01, DHTO=.02m²/s. All six real native cyclic boundaries, 3D warped cells, actual source Bq log and 80/40-step HT/HTO/c solves; physically integrated source and signed budgets PASS with maximum Bq residual 8.65e-9 Bq in initial development experiments and per-step source error <1.7e-12 Bq.
+
+**Independent reference** is a wrapped *infinite-domain* continuous Gaussian convected/diffused in a periodic unit box; heat kernel involves 3 separable periodic image sums (±2) and independent 2-dimensional time integrals for HT→HTO conversion. Pure-Python 24- versus 32-point Gauss–Legendre and 5- versus 7-image sums agree far within frozen 0.05 Bq/m³ threshold. Probability the input full-space Gaussian lies outside the native cube is independently bounded **8.573876375539413e-8** by analytic erf: reference and finite-volume source are **not exactly identical**, although physical boundary-tail mismatch is tiny. Native source is also spatially sampled/renormalized by volume, which is the discretization being evaluated.
+
+Receptor values are always native FINAL field values at each mesh's **nearest real warped OpenFOAM cell centre**, and Green reference computed at the **same exact real cell centre**, not a fictitious direct interpolation at the fixed nominal location. This method produces real per-cell error measurements but the real cell location shifts as the mesh refines, so its series cannot by itself establish receptor convergence at fixed physical coordinates.
+
+| Fixed nominal probe | 8³ HT relative error | 12³ HT relative error | 16³ HT relative error | 8³ HTO relative error | 12³ HTO relative error | 16³ HTO relative error |
+|---|---:|---:|---:|---:|---:|---:|
+| R1 (.60,.62,.55) | .16819 | .001999 | .23502 | .15832 | .05894 | .21134 |
+| R2 (.75,.50,.50) | .51123 | .42398 | .37836 | .44998 | .36400 | .31777 |
+| R3 (.88,.62,.55) | .31543 | .10848 | .05353 | .29154 | .02429 | .10809 |
+
+The 16³ real R3-native cell is at 0.03718 m from nominal; R3 HT native 56009.60 versus independent periodic Green reference 59177.24 Bq/m³ (~5.35% relative); HTO native 14605.28 versus Green 16375.25 (~10.81%). R2 16³ native HT 81934.36 versus analytic 131802.99 (~37.84%); HTO 20209.58 versus analytic 29622.68 (~31.78%), signalling significant discretization/source-localization error. R1 HT 16³ relative error increases again (0.235 versus 0.002 at 12³), as does R3 HTO versus 12³. No claim of global monotone convergence, unique source error cause, grid independence or production-scale CFD.
+
+One extra 8³ dt=.01 native experiment was run to measure temporal sensitivity, **not** an independent time order-of-accuracy proof. Three strict native corruption controls passed: true R2-nearest physical HT cell +1e5 Bq/m³ rejected on final field-vs-logged integral, native HT emitted Bq log +1000 rejected by independent source-window audit, native sourceSigma .08→.12 rejected by exact physics input audit.
+
+This is a single synthetic 1m cube with prescribed uniform velocity and a small Gaussian volumetric emission. It is NOT an actual stack, meteorological wind, full 3-D PISO/URANS, observed plume, site, soil PDE, air-soil interface or radiation dose; complete independent external scientific admission NOT_RUN and Draft status retained. The next scientifically useful numerical test is a *fixed physical-coordinate receiver reconstruction* with appropriately independently verified OpenFOAM interpolation (and preferably full 3D space/time refinement), since nearest-cell centre drift masks true convergence in M1C-13.

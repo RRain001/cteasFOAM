@@ -82,6 +82,13 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   time-order 0.01/0.005/0.0025 s and negative controls with no C++ changes.
   It does not validate spatially localized Gaussian or real-world stack release;
   see `docs/m1c-12-pulsed-analytic-findings.md`.
+  M1C-13 independently compares genuine native localized 3D Gaussian HT/HTO
+  plume fields to a distinct periodic Green-function time convolution
+  (wrapped Gaussian; outside-cube probability 8.57e-8), auditing
+  source shape, finite release Bq, stepwise budgets and real nearest-cell
+  receptor diagnostics. It does not establish whole-field or fixed-point
+  mesh convergence, or real stack/weather/URANS/soil physics; see
+  `docs/m1c-13-local-gaussian-green-findings.md`.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange

@@ -1,0 +1,25 @@
+# M1C-13 frozen acceptance: localized Gaussian HT/HTO versus time-Green semi-analytic periodic reference
+
+This contract is committed before implementing or testing M1C-13. Parent Draft PR #40 exact SHA 424ef085aa085c156c51e52eb8f93b07a955d408. No C++ solver changes and no loosening of M1C-0..12 acceptance. Strictly a synthetic 1-metre periodic box, not real stack/URANS/soil.
+
+## Physics and independent reference
+
+True unit periodic cube with six opposing cyclic boundaries and 3-D interior x-warp 0.04*sin(pi*x)*sin(pi*y)*sin(pi*z), prescribed constant U=(1,.05,.03) m/s. Initial HT=HTO=0 Bq/m3, passive c=1. Gaussian source centre=(.42,.55,.50)m, sigma=.08m, Q_HT=60000 and Q_HTO=12000 Bq/s for source window [a,b]=[.073,.137]s, giving exactly 3840 HT Bq and 768 HTO Bq. kOx=.4/s, synthetic lambda=.2/s, DHT=.01 and DHTO=.02m2/s. End t=.4s. Native Gaussian source is cell-centre-sampled and renormalized over actual cells.
+
+Independent reference solves a continuous *wrapped full-space Gaussian* in a 3D periodic cube using a product of three periodic heat kernels G(v;x-c-U*tau), with variance v=sigma²+2D*tau, each kernel summing Gaussian images over integer shifts, tau=t-s:
+- HT = QHT * integral_a^b exp(-(.4+.2)*tau) G(sigma²+2DHT*tau;x-c-U*tau) ds.
+- HTO_direct = QHTO * integral_a^b exp(-.2*tau) G(sigma²+2DHTO*tau;x-c-U*tau) ds.
+- HTO_conversion = .4*QHT * integral_a^b exp(-.2*tau) integral_0^tau exp(-.4*r) G(sigma²+2DHT*r+2DHTO*(tau-r);x-c-U*tau) dr ds.
+Integrals computed with independent pure-Python Gauss-Legendre rules at 24 and 32 nodes, no native finite-volume operator or OpenFOAM source weights. Gaussian periodic images k=-2,-1,0,1,2 in each dimension; verify ±3 images produce no meaningful change. The reference is NOT mathematically the same as the domain-truncated-and-renormalized native source. Calculate the independent physical source probability mass outside the original [0,1]^3 via erf and require it <2e-7. State this reference-source mismatch; do NOT label this an exact test of the native truncated source. Nonperiodic free-space plume reference alone is inadmissible.
+
+## Native experiments and test gates
+
+Official OpenCFD v2606: actual wmake, blockMesh/checkMesh, genuine warped OpenFOAM native cell centres/volumes, HT/HTO/U fields and source/flux logs. Grids 8³ (512), 12³ (1728), 16³ (4096) at dt=.005s (80 time steps) and extra 8³ at dt=.01s (40 steps). Four genuine 3D experiments, all source/transport coefficients invariant across grid/time. Every step: source overlap and emission HT/HTO correct to <1e-8 Bq; exact total injection 3840/768 Bq; signed HT/HTO/combined Bq balance <1e-5 Bq; native cyclic net source flux <1e-5 Bq/s. All native concentrations finite/nonnegative. 40/80 actual HT/HTO/c solves; prescribed U, no p/U solves; source inactive outside window.
+
+Three nominal receptor points R1=(.60,.62,.55), R2=(.75,.50,.50), R3=(.88,.62,.55)m; each sample must select nearest actual native cell centre and record its real location/distance (never compare a native-cell value to reference at nominal receptor). Distances must be <.16m for NX8, <.11m for NX12, <.09m for NX16. At each selected real centre independently calculate wrapped heat-kernel reference for HT/HTO, report signed, absolute and relative actual native errors for all meshes and receptors. For analytic concentrations >=10 Bq/m3 require relative error <0.85 for NX8, <0.65 for NX12, <0.50 for NX16. Any larger values FAIL, do not relax thresholds to manufacture PASS. For analytic values <10 Bq/m3 report as quantitative diagnostics only. Record R3 signed trends; do not require or pretend it converges monotonically.
+
+Independent 24-point versus 32-point time quadrature for all 24 mesh/receptor/species evaluations must agree <=0.05 Bq/m3 or relative <1e-5 when concentration >5000 Bq/m3. Verify 5-image and 7-image periodic sums agree within 1e-8 Bq/m3 on selected receptors. Any reference numerical instability causes FAIL rather than numerical-threshold inflation. Print finite lost-tail probability and normalization, not confuse actual native Bq conservation with exact continuous spatial shape.
+
+Negative controls on real 16³ native data: (a) edit one final HT value at actual R2-nearest cell by +100000 Bq/m3, require rejection by independent final Bq inventory/physical comparison; (b) modify a nonzero emitted HT source-log value by +1000 Bq, require rejection by independently reconstructed source-window audit; (c) change native physical input sigma=.08 to .12, require rejection by exact frozen input validation. Negative tests must reject with exact expected physics failure, not an arbitrary parsing exception.
+
+All prior M1C-0..12 exact targeted scripts unchanged. New M1C-13 gives 14 official native targeted suites. On exact clean SHA run 14/14, then Ubuntu managed 7 software full and publish software-only status. Formal scientific field/independent-review NOT_RUN; Draft PR unmerged, no science-validated or merge-verified label. Real stack, 3-D wind physics PISO/URANS, building, soil and air-soil coupling outside this benchmark.
