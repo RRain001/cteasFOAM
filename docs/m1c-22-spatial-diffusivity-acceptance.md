@@ -1,0 +1,11 @@
+# M1C-22 frozen numerical scope: variable spatial HT/HTO diffusion
+
+Parent M1C-21 Draft PR #49 exact HEAD 2e9fdd80eeb0f381434b2e332aa0be9b42b495f4. Freeze before implementation. This is ONE limited experimental change, not production meteorology.
+
+1. Opt-in activityDiffusivityMode field valid only with activityMode htHto, activityConvectionBlend faceMules, activityDiffusionCorrection faceMules. Old default constant D and previous 22 M1C-0..21 suites unchanged. Invalid mode/incompatibility fails before the time loop.
+2. Read two genuine separate OpenFOAM 3-D volScalarField inputs 0/DHTSpatial and 0/DHTOSpatial with dimension L2/T. Reject missing files, nonfinite, negative or zero cell and physical boundary coefficients before any time step. No hidden scalar fallback.
+3. The physical spatial coefficient must be SAME for the implicit positive low-order laplacian and the explicit signed high-minus-low face diffusive correction, using native OpenFOAM interpolation for processor/cyclic faces. Keep HT→HTO reaction source and exactly the limited signed Bq flux accounting. Open physical boundary retains low-order flux.
+4. Native 8³ warped periodic test with strictly positive nonconstant input species diffusivity, actual min/max distinct, native every-step HT/HTO and combined signed Bq budget <=1e-5 Bq and primitive species minimum >=-1e-8 Bq/m³. Independent constant-field equivalence: when the input fields are actually uniform equal to historic scalar values, final real-cell fields and all-step signed budgets must match original M1C-21 within 3e-4 Bq/m³ and 1e-5 Bq. DO NOT compare spatial-D against the analytic Green function that assumes constant diffusion.
+5. Actual 2-rank decomposed case and real 960-cell nonperiodic inletOutlet benchmark, with native signed flux/Bq positivity and reconstructed MPI parity if feasible. Report unsupported dimensions or branch explicitly NOT_RUN, never synthetic PASS.
+6. Fail-closed true negative inputs, missing field, invalid configuration. Preserve full prior regression suite, exact-SHA Ubuntu Docker full and software admission. No loosened thresholds/clipping or inventory rescaling.
+7. Dynamic prescribed wind, strongly skewed irregular grids, general meteorology, URANS, soil PDE and independent science remain NOT_RUN for this *limited* M1C-22 step. Keep PR Draft and scientific-admission blocking.
