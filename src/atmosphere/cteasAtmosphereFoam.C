@@ -9,6 +9,8 @@
 #include "constrainPressure.H"
 #include "processorCyclicPolyPatch.H"
 #include <cmath>
+#include <sstream>
+#include <iomanip>
 
 int main(int argc, char* argv[])
 {
@@ -893,6 +895,37 @@ int main(int argc, char* argv[])
              == kOx*HT + htoSourceDensity*sourceProfile
             );
             htoEqn.solve();
+            // M1C-16 opt-in per-step global native primitive-cell
+            // extrema. No added flux or transport correction. These
+            // values do not imply positivity of interpolated faces.
+            if
+            (
+                transportProperties.lookupOrDefault<Foam::Switch>
+                (
+                    "auditActivityExtrema", false
+                )
+            )
+            {
+                const Foam::scalar htMin =
+                    Foam::gMin(HT.primitiveField());
+                const Foam::scalar htMax =
+                    Foam::gMax(HT.primitiveField());
+                const Foam::scalar htoMin =
+                    Foam::gMin(HTO.primitiveField());
+                const Foam::scalar htoMax =
+                    Foam::gMax(HTO.primitiveField());
+                // MessageStream does not expose Ostream::precision
+                // in official v2606; serialize at full precision without
+                // altering formatting of any previous diagnostic log.
+                std::ostringstream auditLine;
+                auditLine << std::setprecision(16)
+                          << "CTEAS_M1C extrema_HT_min_Bq_m3="
+                          << htMin
+                          << " extrema_HT_max_Bq_m3=" << htMax
+                          << " extrema_HTO_min_Bq_m3=" << htoMin
+                          << " extrema_HTO_max_Bq_m3=" << htoMax;
+                Foam::Info << auditLine.str().c_str() << Foam::nl;
+            }
             const Foam::scalar newHT =
                 Foam::fvc::domainIntegrate(HT).value();
             const Foam::scalar newHTO =

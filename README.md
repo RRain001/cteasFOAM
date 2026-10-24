@@ -103,6 +103,17 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   point errors become slightly worse on 8³/16³/24³. The alternate method
   is experimental, NOT an accuracy improvement or a validated stack source;
   see `docs/m1c-15-gaussian-cell-quadrature-findings.md`.
+  M1C-16 keeps `Gauss upwind` as default but independently compares it
+  with `Gauss limitedLinear 1` for HT/HTO in six true 3D native
+  Gaussian-source warped-grid cases using fixed R1/R2/R3 Green references.
+  LimitedLinear substantially reduces R2 concentration error but produces
+  intermediate **negative native HT/HTO activity concentrations** at
+  8³/16³/24³ and is SCIENTIFICALLY REJECTED. Optional
+  `auditActivityExtrema true` logs exact all-step global primitive-cell
+  extrema; it never clips or corrects the fields. The diagnostic software
+  test only PASSes when the physical candidate is flagged REJECTED; see
+  `docs/m1c-16-convection-scheme-findings.md`. No real plume/URANS/soil
+  science is accepted.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
