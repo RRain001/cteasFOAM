@@ -8,6 +8,8 @@
 #include "adjustPhi.H"
 #include "constrainPressure.H"
 #include "processorCyclicPolyPatch.H"
+#include "MULES.H"
+#include "slicedSurfaceFields.H"
 #include <cmath>
 #include <sstream>
 #include <iomanip>
@@ -84,6 +86,7 @@ int main(int argc, char* argv[])
     (
         activityConvectionBlend != "none"
      && activityConvectionBlend != "globalPositive"
+     && activityConvectionBlend != "faceMules"
     )
     {
         FatalErrorInFunction
@@ -94,6 +97,13 @@ int main(int argc, char* argv[])
     {
         FatalErrorInFunction
             << "globalPositive requires activityMode htHto"
+            << exit(FatalError);
+    }
+
+    if (activityConvectionBlend == "faceMules" && activityMode != "htHto")
+    {
+        FatalErrorInFunction
+            << "faceMules requires activityMode htHto"
             << exit(FatalError);
     }
 
@@ -632,7 +642,7 @@ int main(int argc, char* argv[])
     // The tolerance is detection-only: NO clipping or activity correction.
     const auto requireNonnegativeActivity = [&](const char* phase)
     {
-        if (!enforceNonnegativeActivity) return;
+        if (!enforceNonnegativeActivity && activityConvectionBlend != "faceMules") return;
         // Scalar min/max reductions alone can silently ignore NaN on some
         // implementations. Count nonfinite cells explicitly, then reduce
         // before any rank may abort (including on a decomposed mesh).
@@ -1039,6 +1049,139 @@ int main(int argc, char* argv[])
                            << Foam::nl;
                 return alpha;
             };
+            // M1C-19 uses a genuine OpenFOAM MULES per-face correction.
+            // Unlike globalPositive, this is one native implicit upwind solve
+            // followed by a bounded, explicit, signed-flux correction.
+            const auto localFct = [&]
+            (
+                Foam::volScalarField& species,
+                const char* name,
+                const Foam::word& highScheme
+            ) -> Foam::tmp<Foam::surfaceScalarField>
+            {
+                species.correctBoundaryConditions();
+                // The explicit correction must start from a genuine
+                // nonnegative finite-volume low-order state, not rely on
+                // MULES to silently repair an already-invalid solve.
+                Foam::label invalidLow = 0;
+                forAll(species.primitiveField(), cellI)
+                {
+                    if (!std::isfinite(species[cellI])) ++invalidLow;
+                }
+                Foam::reduce(invalidLow, Foam::sumOp<Foam::label>());
+                const Foam::scalar lowMinimum =
+                    Foam::gMin(species.primitiveField());
+                if (invalidLow || !std::isfinite(lowMinimum) || lowMinimum < -1e-8)
+                {
+                    FatalErrorInFunction
+                        << "CTEAS_M1C19_INVALID_LOW species=" << name
+                        << " minimum=" << lowMinimum
+                        << " nonfinite_cells=" << invalidLow
+                        << exit(FatalError);
+                }
+                const Foam::surfaceScalarField highAdv
+                (
+                    Foam::fvc::flux(phi, species, highScheme)
+                );
+                const Foam::surfaceScalarField lowAdv
+                (
+                    Foam::fvc::flux
+                    (
+                        phi, species,
+                        Foam::word("div(phi,") + species.name() + ")"
+                    )
+                );
+                Foam::surfaceScalarField correction(highAdv - lowAdv);
+                // In this phase the physical inlet/outlet face flux remains
+                // exactly low-order. Processor/cyclic flux remains coupled.
+                forAll(correction.boundaryField(), patchI)
+                {
+                    if (!correction.boundaryField()[patchI].coupled())
+                    {
+                        correction.boundaryFieldRef()[patchI] = 0.0;
+                    }
+                }
+                // MULES requires a start-of-correction (oldTime) state, not
+                // the previous Euler step. Never mutate species.oldTime().
+                Foam::volScalarField limiterState
+                (
+                    Foam::IOobject
+                    (
+                        species.name(), // MULES selects fvSolution/solvers/{HT,HTO}
+                        runTime.timeName(), mesh,
+                        Foam::IOobject::NO_READ,
+                        Foam::IOobject::NO_WRITE,
+                        Foam::IOobject::NO_REGISTER
+                    ),
+                    species
+                );
+                limiterState.oldTime() = limiterState;
+                Foam::surfaceScalarField zeroBase(0.0*correction);
+                Foam::scalarField faceLambda(mesh.nFaces(), 1.0);
+                Foam::MULES::limiter
+                (
+                    faceLambda,
+                    1.0/runTime.deltaTValue(),
+                    Foam::geometricOneField(),
+                    limiterState,
+                    zeroBase,
+                    correction,
+                    Foam::zeroField(), Foam::zeroField(),
+                    Foam::scalarField(mesh.nCells(), 1e12),
+                    Foam::scalarField(mesh.nCells(), 0.0)
+                );
+                Foam::slicedSurfaceScalarField lambda
+                (
+                    Foam::IOobject
+                    (
+                        "m1c19_lambda", runTime.timeName(), mesh,
+                        Foam::IOobject::NO_READ,
+                        Foam::IOobject::NO_WRITE,
+                        Foam::IOobject::NO_REGISTER
+                    ),
+                    mesh, Foam::dimless, faceLambda, false
+                );
+                correction *= lambda;
+                species -= runTime.deltaT()*Foam::fvc::div(correction);
+                species.correctBoundaryConditions();
+                const Foam::scalar minimum = Foam::gMin(species.primitiveField());
+                const Foam::scalar maximum = Foam::gMax(species.primitiveField());
+                const Foam::scalar lMin = Foam::gMin(faceLambda);
+                const Foam::scalar lMax = Foam::gMax(faceLambda);
+                Foam::label limited = 0;
+                forAll(faceLambda, faceI)
+                {
+                    if (faceLambda[faceI] < 1.0 - 1e-12) ++limited;
+                }
+                Foam::reduce(limited, Foam::sumOp<Foam::label>());
+                if
+                (
+                    !std::isfinite(minimum) || !std::isfinite(maximum)
+                 || minimum < -1e-8
+                 || !std::isfinite(lMin) || !std::isfinite(lMax)
+                 || lMin < 0 || lMax > 1.0
+                )
+                {
+                    FatalErrorInFunction
+                        << "CTEAS_M1C19_FACE_FCT_INVALID species=" << name
+                        << " min=" << minimum << " lMin=" << lMin
+                        << " lMax=" << lMax << exit(FatalError);
+                }
+                Foam::Info << "CTEAS_M1C19 species=" << name
+                           << " face_lambda_min=" << lMin
+                           << " face_lambda_max=" << lMax
+                           << " limited_faces=" << limited
+                           << " activity_min_Bq_m3=" << minimum
+                           << Foam::nl;
+                return Foam::tmp<Foam::surfaceScalarField>
+                (
+                    new Foam::surfaceScalarField(correction)
+                );
+            };
+            Foam::autoPtr<Foam::surfaceScalarField> htLowFaceFlux;
+            Foam::autoPtr<Foam::surfaceScalarField> htoLowFaceFlux;
+            Foam::autoPtr<Foam::surfaceScalarField> htFaceCorr;
+            Foam::autoPtr<Foam::surfaceScalarField> htoFaceCorr;
             Foam::autoPtr<Foam::surfaceScalarField> htBlendFlux;
             Foam::autoPtr<Foam::surfaceScalarField> htoBlendFlux;
             Foam::fvScalarMatrix htEqn
@@ -1050,6 +1193,17 @@ int main(int argc, char* argv[])
              == htSourceDensity*sourceProfile
             );
             htEqn.solve();
+            if (activityConvectionBlend == "faceMules")
+            {
+                // Freeze the implicit low-order flux BEFORE applying the
+                // explicit bounded field correction: on an open boundary
+                // reevaluating htEqn.flux() afterwards is not the solved
+                // low-state flux and corrupts the Bq budget.
+                htLowFaceFlux.reset
+                (
+                    new Foam::surfaceScalarField(htEqn.flux())
+                );
+            }
             if (activityConvectionBlend == "globalPositive")
             {
                 const Foam::scalarField lowHT(HT.primitiveField());
@@ -1074,6 +1228,13 @@ int main(int argc, char* argv[])
                     )
                 );
             }
+            if (activityConvectionBlend == "faceMules")
+            {
+                htFaceCorr.reset
+                (
+                    localFct(HT, "HT", "div(phi,HTHigh)").ptr()
+                );
+            }
             Foam::fvScalarMatrix htoEqn
             (
                 Foam::fvm::ddt(HTO)
@@ -1083,6 +1244,13 @@ int main(int argc, char* argv[])
              == kOx*HT + htoSourceDensity*sourceProfile
             );
             htoEqn.solve();
+            if (activityConvectionBlend == "faceMules")
+            {
+                htoLowFaceFlux.reset
+                (
+                    new Foam::surfaceScalarField(htoEqn.flux())
+                );
+            }
             if (activityConvectionBlend == "globalPositive")
             {
                 const Foam::scalarField lowHTO(HTO.primitiveField());
@@ -1105,6 +1273,13 @@ int main(int argc, char* argv[])
                     (
                         (1.0-alpha)*lowFlux + alpha*highFlux
                     )
+                );
+            }
+            if (activityConvectionBlend == "faceMules")
+            {
+                htoFaceCorr.reset
+                (
+                    localFct(HTO, "HTO", "div(phi,HTOHigh)").ptr()
                 );
             }
             // Fail closed on a genuine unsafe time step BEFORE any output is
@@ -1220,6 +1395,11 @@ int main(int argc, char* argv[])
                 {
                     htFlux = htBlendFlux();
                     htoFlux = htoBlendFlux();
+                }
+                else if (activityConvectionBlend == "faceMules")
+                {
+                    htFlux = htLowFaceFlux() + htFaceCorr();
+                    htoFlux = htoLowFaceFlux() + htoFaceCorr();
                 }
                 Foam::scalar htLeft = 0.0, htRight = 0.0;
                 Foam::scalar htoLeft = 0.0, htoRight = 0.0;
