@@ -7,6 +7,7 @@
 #include "constrainHbyA.H"
 #include "adjustPhi.H"
 #include "constrainPressure.H"
+#include "processorCyclicPolyPatch.H"
 
 int main(int argc, char* argv[])
 {
@@ -502,6 +503,15 @@ int main(int argc, char* argv[])
                 Foam::fvc::domainIntegrate(HT).value();
             const Foam::scalar oldHTO =
                 Foam::fvc::domainIntegrate(HTO).value();
+            // Correct the coupled HT/HTO boundary values (MPI halo exchange)
+            // before assembling a corrected non-orthogonal Laplacian. In
+            // particular, processorCyclic must use the current cell states
+            // when evaluating the explicit snGrad correction. Omitting this
+            // yielded partition-dependent species fields even with fully
+            // converged linear solves; the default diffusion scheme stays
+            // Gauss linear corrected and remains independently configurable.
+            HT.correctBoundaryConditions();
+            HTO.correctBoundaryConditions();
             Foam::fvScalarMatrix htEqn
             (
                 Foam::fvm::ddt(HT)
@@ -562,8 +572,30 @@ int main(int argc, char* argv[])
                         const Foam::scalar value =
                             Foam::sum(f.boundaryField()[patchI]);
                         net += value;
-                        if (patchI == leftPatch) left = value;
-                        if (patchI == rightPatch) right = value;
+                        // A decomposition crossing a cyclic pair converts
+                        // physical xMin/xMax faces into processorCyclic
+                        // patches. Their original identity is recorded by
+                        // the official polyPatch referPatchName() API.
+                        // Count them in the physical signed boundary flux,
+                        // not as an ordinary processor internal interface.
+                        Foam::word physicalName =
+                            mesh.boundaryMesh()[patchI].name();
+                        if
+                        (
+                            Foam::isA<Foam::processorCyclicPolyPatch>
+                            (
+                                mesh.boundaryMesh()[patchI]
+                            )
+                        )
+                        {
+                            physicalName = Foam::refCast
+                            <const Foam::processorCyclicPolyPatch>
+                            (
+                                mesh.boundaryMesh()[patchI]
+                            ).referPatchName();
+                        }
+                        if (physicalName == "xMin") left += value;
+                        if (physicalName == "xMax") right += value;
                     }
                     Foam::reduce(net, Foam::sumOp<Foam::scalar>());
                     Foam::reduce(left, Foam::sumOp<Foam::scalar>());
