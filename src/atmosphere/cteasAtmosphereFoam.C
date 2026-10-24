@@ -10,6 +10,7 @@
 #include "processorCyclicPolyPatch.H"
 #include "MULES.H"
 #include "slicedSurfaceFields.H"
+#include "fvcSnGrad.H"
 #include <cmath>
 #include <sstream>
 #include <iomanip>
@@ -105,6 +106,98 @@ int main(int argc, char* argv[])
         FatalErrorInFunction
             << "faceMules requires activityMode htHto"
             << exit(FatalError);
+    }
+
+
+    // M1C-21 opt-in: a positive two-point low-order diffusion matrix,
+    // plus one locally MULES-bounded nonorthogonal correction face flux.
+    const Foam::word activityDiffusionCorrection
+    (
+        transportProperties.lookupOrDefault<Foam::word>
+        (
+            "activityDiffusionCorrection", "none"
+        )
+    );
+    if
+    (
+        activityDiffusionCorrection != "none"
+     && activityDiffusionCorrection != "faceMules"
+    )
+    {
+        FatalErrorInFunction
+            << "M1C21_UNSUPPORTED_DIFFUSION_MODE "
+            << activityDiffusionCorrection << exit(FatalError);
+    }
+    if
+    (
+        activityDiffusionCorrection == "faceMules"
+     && (activityConvectionBlend != "faceMules" || activityMode != "htHto")
+    )
+    {
+        FatalErrorInFunction
+            << "M1C21_REQUIRES_FACE_MULES_HT_HTO"
+            << exit(FatalError);
+    }
+
+    if (activityDiffusionCorrection == "faceMules")
+    {
+        const Foam::IOdictionary numericalSchemes
+        (
+            Foam::IOobject
+            (
+                "fvSchemes", runTime.system(), mesh,
+                Foam::IOobject::MUST_READ,
+                Foam::IOobject::NO_WRITE
+            )
+        );
+        const Foam::dictionary& lap =
+            numericalSchemes.subDict("laplacianSchemes");
+        const Foam::dictionary& grad =
+            numericalSchemes.subDict("snGradSchemes");
+        // A silent dictionary default could accidentally substitute
+        // non-monotone corrected diffusion for the required low matrix.
+        const auto requireLap = [&](const char* key)
+        {
+            if (!lap.found(key))
+            {
+                FatalErrorInFunction
+                    << "M1C21_REQUIRED_POSITIVE_LOW_SCHEME_MISSING " << key
+                    << exit(FatalError);
+            }
+            Foam::word a, b, c;
+            lap.lookup(key) >> a >> b >> c;
+            if (a != "Gauss" || b != "linear" || c != "uncorrected")
+            {
+                FatalErrorInFunction
+                    << "M1C21_REQUIRED_POSITIVE_LOW_SCHEME_WRONG " << key
+                    << " actual=" << a << " " << b << " " << c
+                    << exit(FatalError);
+            }
+        };
+        requireLap("laplacian(DHT,HTLowDiff)");
+        requireLap("laplacian(DHTO,HTOLowDiff)");
+        const auto requireGrad = [&](const char* key, const char* required)
+        {
+            if (!grad.found(key))
+            {
+                FatalErrorInFunction
+                    << "M1C21_REQUIRED_NAMED_SNGRAD_MISSING " << key
+                    << exit(FatalError);
+            }
+            Foam::word chosen;
+            grad.lookup(key) >> chosen;
+            if (chosen != required)
+            {
+                FatalErrorInFunction
+                    << "M1C21_REQUIRED_NAMED_SNGRAD_WRONG " << key
+                    << " actual=" << chosen << " expected=" << required
+                    << exit(FatalError);
+            }
+        };
+        requireGrad("snGrad(HTHighDiff)", "corrected");
+        requireGrad("snGrad(HTLowDiff)", "uncorrected");
+        requireGrad("snGrad(HTOHighDiff)", "corrected");
+        requireGrad("snGrad(HTOLowDiff)", "uncorrected");
     }
 
     Foam::dimensionedScalar kOx
@@ -1056,7 +1149,8 @@ int main(int argc, char* argv[])
             (
                 Foam::volScalarField& species,
                 const char* name,
-                const Foam::word& highScheme
+                const Foam::word& highScheme,
+                const Foam::dimensionedScalar& diffusivity
             ) -> Foam::tmp<Foam::surfaceScalarField>
             {
                 species.correctBoundaryConditions();
@@ -1092,6 +1186,53 @@ int main(int argc, char* argv[])
                     )
                 );
                 Foam::surfaceScalarField correction(highAdv - lowAdv);
+                if (activityDiffusionCorrection == "faceMules")
+                {
+                    const Foam::word hiGrad
+                    (
+                        Foam::word("snGrad(") + species.name() + "HighDiff)"
+                    );
+                    const Foam::word loGrad
+                    (
+                        Foam::word("snGrad(") + species.name() + "LowDiff)"
+                    );
+                    // The minus sign is the signed outward diffusive flux
+                    // in the conservative +div(F) transport equation.
+                    const Foam::surfaceScalarField diffCorrection
+                    (
+                        -diffusivity*mesh.magSf()
+                       *(
+                            Foam::fvc::snGrad(species, hiGrad)
+                          - Foam::fvc::snGrad(species, loGrad)
+                        )
+                    );
+                    Foam::scalar amplitude=0;
+                    Foam::label nonzero=0;
+                    forAll(diffCorrection.primitiveField(), faceI)
+                    {
+                        const Foam::scalar value =
+                            diffCorrection.primitiveField()[faceI];
+                        amplitude=Foam::max(amplitude,Foam::mag(value));
+                        nonzero+=(Foam::mag(value)>1e-12);
+                    }
+                    Foam::reduce(amplitude,Foam::maxOp<Foam::scalar>());
+                    Foam::reduce(nonzero,Foam::sumOp<Foam::label>());
+                    if (!std::isfinite(amplitude))
+                    {
+                        FatalErrorInFunction
+                          << "M1C21_INVALID_DIFFUSIVE_FACE species=" << name
+                          << exit(FatalError);
+                    }
+                    Foam::Info
+                        << "CTEAS_M1C21_DIFFUSION species=" << name
+                        << " max_abs_high_minus_low_Bq_s=" << amplitude
+                        << " nonzero_internal_faces=" << nonzero
+                        << Foam::nl;
+                    correction += diffCorrection;
+                }
+                // For physical walls and inlet/outlet preserve the
+                // conservative solved two-point implicit boundary flux;
+                // processor/cyclic face corrections remain synchronized.
                 // In this phase the physical inlet/outlet face flux remains
                 // exactly low-order. Processor/cyclic flux remains coupled.
                 forAll(correction.boundaryField(), patchI)
@@ -1188,7 +1329,13 @@ int main(int argc, char* argv[])
             (
                 Foam::fvm::ddt(HT)
               + Foam::fvm::div(phi, HT)
-              - Foam::fvm::laplacian(DHT, HT)
+              - Foam::fvm::laplacian
+                (
+                    DHT, HT,
+                    activityDiffusionCorrection == "faceMules"
+                      ? Foam::word("laplacian(DHT,HTLowDiff)")
+                      : Foam::word("laplacian(DHT,HT)")
+                )
               + Foam::fvm::Sp(kOx + lambdaT, HT)
              == htSourceDensity*sourceProfile
             );
@@ -1232,14 +1379,20 @@ int main(int argc, char* argv[])
             {
                 htFaceCorr.reset
                 (
-                    localFct(HT, "HT", "div(phi,HTHigh)").ptr()
+                    localFct(HT, "HT", "div(phi,HTHigh)", DHT).ptr()
                 );
             }
             Foam::fvScalarMatrix htoEqn
             (
                 Foam::fvm::ddt(HTO)
               + Foam::fvm::div(phi, HTO)
-              - Foam::fvm::laplacian(DHTO, HTO)
+              - Foam::fvm::laplacian
+                (
+                    DHTO, HTO,
+                    activityDiffusionCorrection == "faceMules"
+                      ? Foam::word("laplacian(DHTO,HTOLowDiff)")
+                      : Foam::word("laplacian(DHTO,HTO)")
+                )
               + Foam::fvm::Sp(lambdaT, HTO)
              == kOx*HT + htoSourceDensity*sourceProfile
             );
@@ -1279,7 +1432,7 @@ int main(int argc, char* argv[])
             {
                 htoFaceCorr.reset
                 (
-                    localFct(HTO, "HTO", "div(phi,HTOHigh)").ptr()
+                    localFct(HTO, "HTO", "div(phi,HTOHigh)", DHTO).ptr()
                 );
             }
             // Fail closed on a genuine unsafe time step BEFORE any output is

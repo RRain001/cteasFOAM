@@ -148,6 +148,15 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   or proof of corrected-scheme time robustness. The original frozen
   time-step-only gate remains PARTIAL. See
   `docs/m1c-20-numerical-robustness-findings.md`.
+  M1C-21 adds opt-in activityDiffusionCorrection faceMules, combined
+  with activityConvectionBlend faceMules. A named two-point positive low
+  diffusion matrix plus locally MULES-limited, signed nonorthogonal
+  and advective face corrections preserves activity without clipping.
+  Exact scheme names are required (no fallback to unbounded defaults).
+  The M1C-20 corrected-implicit fine-dt negative finding remains
+  a distinct required negative regression, NOT silently removed.
+  Native scoped periodic/MPI/open evidence and limits are in
+  docs/m1c-21-bounded-nonorthogonal-diffusion-findings.md.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
