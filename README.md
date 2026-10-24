@@ -131,6 +131,14 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   meshes are in scope; unsupported MPI/open modes reject. It is **not**
   local FCT/MULES, proven general positive transport, or external science.
   See `docs/m1c-18-positivity-flux-blend-findings.md`.
+  M1C-19 experimentally adds `activityConvectionBlend faceMules`:
+  native OpenFOAM MULES limiter synchronizes **per-face correction fluxes**
+  against the implicit positive upwind HT and HTO fields, applies the same
+  limited signed flux to activity budget accounting, and keeps physical
+  noncoupled inlet/outlet corrections zero. Synthetic warped 3-D Gaussian,
+  2-rank periodic MPI and open nonperiodic duct benchmarks are documented
+  in `docs/m1c-19-local-fct-findings.md`. Independent environmental/URANS,
+  soil, real air-soil interface and non-Bot science remain NOT_RUN.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
