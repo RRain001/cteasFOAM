@@ -47,7 +47,13 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   no-release controls; see `docs/m1c-7-open-localized-piso-acceptance.md`.
   Source + momentum integration is numerically scoped; it does **not**
   constitute atmospheric URANS, plume grid convergence or independent field
-  validation.
+  validation. M1C-8 adds a separate five-case 3-D grid/time refinement
+  audit (576/960/2880 cells and 0.04/0.02/0.01 s steps) with fixed
+  Gaussian source/receiver geometry and native signed Bq budgets. Its
+  independently checked R1 concentration differences shrink on both
+  refinement axes, but several R2/R3 results remain non-monotonic;
+  see `docs/m1c-8-convergence-acceptance.md`. This is **not** a global
+  mesh-independent, meteorological or externally validated result.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
