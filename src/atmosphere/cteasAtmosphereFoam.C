@@ -200,6 +200,38 @@ int main(int argc, char* argv[])
         requireGrad("snGrad(HTOLowDiff)", "uncorrected");
     }
 
+    // Experimental M1C-22: spatial diffusivities are genuine input fields,
+    // not a synthetic formula reconstructed inside this solver.
+    const Foam::word activityDiffusivityMode
+    (
+        transportProperties.lookupOrDefault<Foam::word>
+        (
+            "activityDiffusivityMode", "constant"
+        )
+    );
+    if
+    (
+        activityDiffusivityMode != "constant"
+     && activityDiffusivityMode != "field"
+    )
+    {
+        FatalErrorInFunction
+            << "M1C22_UNSUPPORTED_DIFFUSIVITY_MODE "
+            << activityDiffusivityMode << exit(FatalError);
+    }
+    if
+    (
+        activityDiffusivityMode == "field"
+     && (activityMode != "htHto"
+      || activityConvectionBlend != "faceMules"
+      || activityDiffusionCorrection != "faceMules")
+    )
+    {
+        FatalErrorInFunction
+            << "M1C22_FIELD_REQUIRES_BOUNDED_HT_HTO_MULES"
+            << exit(FatalError);
+    }
+
     Foam::dimensionedScalar kOx
     (
         "kOx", Foam::dimless/Foam::dimTime, 0.0
@@ -628,6 +660,73 @@ int main(int argc, char* argv[])
         ),
         mesh
     );
+
+    Foam::autoPtr<Foam::volScalarField> dHTField;
+    Foam::autoPtr<Foam::volScalarField> dHTOField;
+    if (activityDiffusivityMode == "field")
+    {
+        const auto readDiffusivity =
+        [&]
+        (
+            const char* name,
+            Foam::autoPtr<Foam::volScalarField>& result
+        )
+        {
+            result.reset
+            (
+                new Foam::volScalarField
+                (
+                    Foam::IOobject
+                    (
+                        name, runTime.timeName(), mesh,
+                        Foam::IOobject::MUST_READ,
+                        Foam::IOobject::NO_WRITE
+                    ),
+                    mesh
+                )
+            );
+            result().correctBoundaryConditions();
+            if (result().dimensions() != Foam::dimViscosity)
+            {
+                FatalErrorInFunction
+                    << "M1C22_BAD_DIFFUSIVITY_DIMENSIONS species=" << name
+                    << " dimensions=" << result().dimensions()
+                    << exit(FatalError);
+            }
+            Foam::label invalid=0;
+            forAll(result().primitiveField(), i)
+            {
+                const Foam::scalar value=result()[i];
+                if (!std::isfinite(value) || value <= 0) ++invalid;
+            }
+            forAll(result().boundaryField(), patchI)
+            {
+                const auto& patch=result().boundaryField()[patchI];
+                forAll(patch, faceI)
+                {
+                    if (!std::isfinite(patch[faceI])
+                     || patch[faceI] <= 0) ++invalid;
+                }
+            }
+            Foam::reduce(invalid, Foam::sumOp<Foam::label>());
+            const Foam::scalar low=Foam::gMin(result().primitiveField());
+            const Foam::scalar high=Foam::gMax(result().primitiveField());
+            if (invalid || !std::isfinite(low) || !std::isfinite(high)
+             || low <= 0 || high <= 0)
+            {
+                FatalErrorInFunction
+                    << "M1C22_NONPOSITIVE_DIFFUSIVITY species=" << name
+                    << " invalid=" << invalid
+                    << " min=" << low << " max=" << high
+                    << exit(FatalError);
+            }
+            Foam::Info << "CTEAS_M1C22_SPATIAL_DIFFUSIVITY species="
+                       << name << " min=" << low << " max=" << high
+                       << Foam::nl;
+        };
+        readDiffusivity("DHTSpatial", dHTField);
+        readDiffusivity("DHTOSpatial", dHTOField);
+    }
 
     Foam::volScalarField c
     (
@@ -1150,7 +1249,8 @@ int main(int argc, char* argv[])
                 Foam::volScalarField& species,
                 const char* name,
                 const Foam::word& highScheme,
-                const Foam::dimensionedScalar& diffusivity
+                const Foam::dimensionedScalar& diffusivity,
+                const Foam::volScalarField* variableDiffusivity
             ) -> Foam::tmp<Foam::surfaceScalarField>
             {
                 species.correctBoundaryConditions();
@@ -1200,7 +1300,22 @@ int main(int argc, char* argv[])
                     // in the conservative +div(F) transport equation.
                     const Foam::surfaceScalarField diffCorrection
                     (
-                        -diffusivity*mesh.magSf()
+                        (
+                            variableDiffusivity
+                          ? -Foam::fvc::interpolate(*variableDiffusivity)
+                          : -Foam::surfaceScalarField
+                            (
+                                Foam::IOobject
+                                (
+                                    "m1c22_constant_d", runTime.timeName(),
+                                    mesh, Foam::IOobject::NO_READ,
+                                    Foam::IOobject::NO_WRITE,
+                                    Foam::IOobject::NO_REGISTER
+                                ),
+                                mesh, diffusivity
+                            )
+                        )
+                       *mesh.magSf()
                        *(
                             Foam::fvc::snGrad(species, hiGrad)
                           - Foam::fvc::snGrad(species, loGrad)
@@ -1325,17 +1440,23 @@ int main(int argc, char* argv[])
             Foam::autoPtr<Foam::surfaceScalarField> htoFaceCorr;
             Foam::autoPtr<Foam::surfaceScalarField> htBlendFlux;
             Foam::autoPtr<Foam::surfaceScalarField> htoBlendFlux;
+            const Foam::word htLaplacianName
+            (
+                activityDiffusionCorrection == "faceMules"
+                  ? Foam::word("laplacian(DHT,HTLowDiff)")
+                  : Foam::word("laplacian(DHT,HT)")
+            );
+            const Foam::tmp<Foam::fvScalarMatrix> htLaplacian
+            (
+                dHTField.valid()
+                  ? Foam::fvm::laplacian(dHTField(), HT, htLaplacianName)
+                  : Foam::fvm::laplacian(DHT, HT, htLaplacianName)
+            );
             Foam::fvScalarMatrix htEqn
             (
                 Foam::fvm::ddt(HT)
               + Foam::fvm::div(phi, HT)
-              - Foam::fvm::laplacian
-                (
-                    DHT, HT,
-                    activityDiffusionCorrection == "faceMules"
-                      ? Foam::word("laplacian(DHT,HTLowDiff)")
-                      : Foam::word("laplacian(DHT,HT)")
-                )
+              - htLaplacian
               + Foam::fvm::Sp(kOx + lambdaT, HT)
              == htSourceDensity*sourceProfile
             );
@@ -1379,20 +1500,30 @@ int main(int argc, char* argv[])
             {
                 htFaceCorr.reset
                 (
-                    localFct(HT, "HT", "div(phi,HTHigh)", DHT).ptr()
+                    localFct
+                    (
+                        HT, "HT", "div(phi,HTHigh)", DHT,
+                        dHTField.valid() ? &dHTField() : nullptr
+                    ).ptr()
                 );
             }
+            const Foam::word htoLaplacianName
+            (
+                activityDiffusionCorrection == "faceMules"
+                  ? Foam::word("laplacian(DHTO,HTOLowDiff)")
+                  : Foam::word("laplacian(DHTO,HTO)")
+            );
+            const Foam::tmp<Foam::fvScalarMatrix> htoLaplacian
+            (
+                dHTOField.valid()
+                  ? Foam::fvm::laplacian(dHTOField(), HTO, htoLaplacianName)
+                  : Foam::fvm::laplacian(DHTO, HTO, htoLaplacianName)
+            );
             Foam::fvScalarMatrix htoEqn
             (
                 Foam::fvm::ddt(HTO)
               + Foam::fvm::div(phi, HTO)
-              - Foam::fvm::laplacian
-                (
-                    DHTO, HTO,
-                    activityDiffusionCorrection == "faceMules"
-                      ? Foam::word("laplacian(DHTO,HTOLowDiff)")
-                      : Foam::word("laplacian(DHTO,HTO)")
-                )
+              - htoLaplacian
               + Foam::fvm::Sp(lambdaT, HTO)
              == kOx*HT + htoSourceDensity*sourceProfile
             );
@@ -1432,7 +1563,11 @@ int main(int argc, char* argv[])
             {
                 htoFaceCorr.reset
                 (
-                    localFct(HTO, "HTO", "div(phi,HTOHigh)", DHTO).ptr()
+                    localFct
+                    (
+                        HTO, "HTO", "div(phi,HTOHigh)", DHTO,
+                        dHTOField.valid() ? &dHTOField() : nullptr
+                    ).ptr()
                 );
             }
             // Fail closed on a genuine unsafe time step BEFORE any output is

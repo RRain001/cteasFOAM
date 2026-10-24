@@ -157,6 +157,14 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   a distinct required negative regression, NOT silently removed.
   Native scoped periodic/MPI/open evidence and limits are in
   docs/m1c-21-bounded-nonorthogonal-diffusion-findings.md.
+  M1C-22 experimentally accepts real OpenFOAM 0/DHTSpatial and
+  0/DHTOSpatial fields via activityDiffusivityMode field, with positive
+  native volume/patch values and exact same D in the implicit low-order
+  and signed facewise high-minus-low diffusive correction. Actual warped
+  8³/16³ uniform input matches historical scalar-D solution; genuine
+  spatial D and 2-rank MPI give positive conservative Bq transport.
+  Physical variable-D open boundary, dynamic meteorology, and URANS
+  science are NOT_RUN; see docs/m1c-22-spatial-diffusivity-findings.md.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
