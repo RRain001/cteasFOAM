@@ -135,6 +135,46 @@ int main(int argc, char* argv[])
             << "M1C unsupported sourceShape: " << sourceShape
             << ". Valid: uniform, gaussian" << exit(FatalError);
     }
+    // M1C-15: opt-in conservative polyhedral Gaussian volume quadrature.
+    // The original cell-centre kernel remains the default, exactly.
+    const Foam::word sourceSpatialQuadrature
+    (
+        transportProperties.lookupOrDefault<Foam::word>
+        (
+            "sourceSpatialQuadrature", "cellCentre"
+        )
+    );
+    if
+    (
+        sourceSpatialQuadrature != "cellCentre"
+     && sourceSpatialQuadrature != "cellTet4"
+    )
+    {
+        FatalErrorInFunction
+            << "M1C unsupported sourceSpatialQuadrature: "
+            << sourceSpatialQuadrature << ". Valid: cellCentre, cellTet4"
+            << exit(FatalError);
+    }
+    const Foam::Switch writeSourceProfile
+    (
+        transportProperties.lookupOrDefault<Foam::Switch>
+        (
+            "writeSourceProfile", false
+        )
+    );
+    if
+    (
+        (transportProperties.found("sourceSpatialQuadrature")
+      || transportProperties.found("writeSourceProfile"))
+     && (!hasActivitySource || sourceShape != "gaussian")
+    )
+    {
+        FatalErrorInFunction
+            << "M1C sourceSpatialQuadrature and writeSourceProfile "
+            << "require a configured Gaussian activity source"
+            << exit(FatalError);
+    }
+
     // Dimensionless spatial profile whose volume-weighted mean is 1.
     // Multiplying the existing rate/domain-volume density by this field
     // conserves exactly the requested Bq/s across native MPI cells.
@@ -242,12 +282,110 @@ int main(int argc, char* argv[])
                     << "M1C gaussian source requires finite center and positive sigma"
                     << exit(FatalError);
             }
+            const Foam::scalar invTwoSigma2 = 1.0/(2*sigma*sigma);
+            const Foam::scalar tetA =
+                (5.0 + 3.0*std::sqrt(5.0))/20.0;
+            const Foam::scalar tetB =
+                (5.0 - std::sqrt(5.0))/20.0;
+            const Foam::faceList& faces = mesh.faces();
+            const Foam::pointField& points = mesh.points();
+            const Foam::vectorField& faceCenters = mesh.faceCentres();
+            const Foam::cellList& cells = mesh.cells();
             forAll(sourceProfile.primitiveField(), cellI)
             {
-                sourceProfile.primitiveFieldRef()[cellI] = std::exp
+                if (sourceSpatialQuadrature == "cellCentre")
+                {
+                    sourceProfile.primitiveFieldRef()[cellI] = std::exp
+                    (
+                        -Foam::magSqr(mesh.C()[cellI] - center)
+                        *invTwoSigma2
+                    );
+                    continue;
+                }
+
+                // Split each true native polyhedral face about its centre
+                // into triangles and form positive-volume tetrahedra
+                // with the actual native cell volume centre.
+                const Foam::vector apex = mesh.C()[cellI];
+                Foam::scalar integral = 0.0;
+                Foam::scalar tetraVolumeSum = 0.0;
+                const Foam::cell& cellFaces = cells[cellI];
+                forAll(cellFaces, faceLocalI)
+                {
+                    const Foam::label faceI = cellFaces[faceLocalI];
+                    const Foam::face& f = faces[faceI];
+                    if (f.size() < 3)
+                    {
+                        FatalErrorInFunction
+                            << "M1C cellTet4 requires valid polygonal faces"
+                            << exit(FatalError);
+                    }
+                    const Foam::vector faceCenter = faceCenters[faceI];
+                    forAll(f, vertexI)
+                    {
+                        const Foam::vector triangleA = points[f[vertexI]];
+                        const Foam::vector triangleB =
+                            points[f[(vertexI + 1) % f.size()]];
+                        const Foam::scalar tetraVolume =
+                            Foam::mag
+                            (
+                                (faceCenter - apex)
+                              & ((triangleA - apex)
+                              ^ (triangleB - apex))
+                            )/6.0;
+                        if
+                        (
+                            !std::isfinite(tetraVolume)
+                         || tetraVolume <= 0.0
+                        )
+                        {
+                            FatalErrorInFunction
+                                << "M1C cellTet4 invalid native tetra volume"
+                                << exit(FatalError);
+                        }
+                        tetraVolumeSum += tetraVolume;
+                        const Foam::vector tet[4] =
+                        {
+                            apex, faceCenter, triangleA, triangleB
+                        };
+                        const Foam::vector cornerSum =
+                            tet[0] + tet[1] + tet[2] + tet[3];
+                        for (Foam::label q = 0; q < 4; ++q)
+                        {
+                            const Foam::vector sample =
+                                tetB*cornerSum + (tetA-tetB)*tet[q];
+                            const Foam::scalar kernel = std::exp
+                            (
+                                -Foam::magSqr(sample-center)*invTwoSigma2
+                            );
+                            if (!std::isfinite(kernel))
+                            {
+                                FatalErrorInFunction
+                                    << "M1C cellTet4 nonfinite kernel"
+                                    << exit(FatalError);
+                            }
+                            integral += tetraVolume*kernel/4.0;
+                        }
+                    }
+                }
+                if
                 (
-                    -Foam::magSqr(mesh.C()[cellI] - center)/(2*sigma*sigma)
-                );
+                    !std::isfinite(integral) || integral <= 0.0
+                 || !std::isfinite(tetraVolumeSum)
+                 || Foam::mag(tetraVolumeSum/mesh.V()[cellI]-1.0)
+                       > 0.005
+                )
+                {
+                    FatalErrorInFunction
+                        << "M1C cellTet4 invalid native volume quadrature"
+                        << " cell=" << cellI
+                        << " tetraVolume=" << tetraVolumeSum
+                        << " realVolume=" << mesh.V()[cellI]
+                        << " gaussianIntegral=" << integral
+                        << exit(FatalError);
+                }
+                sourceProfile.primitiveFieldRef()[cellI] =
+                    integral/mesh.V()[cellI];
             }
             const Foam::scalar weightedVolume = Foam::gSum
             (
@@ -264,7 +402,18 @@ int main(int argc, char* argv[])
             Foam::Info << "CTEAS_M1C sourceShape=gaussian"
                        << " weighted_volume_m3=" << weightedVolume
                        << " domain_volume_m3=" << sourceDomainVolume
+                       << " sourceSpatialQuadrature="
+                       << sourceSpatialQuadrature
                        << Foam::nl;
+            if (writeSourceProfile)
+            {
+                if (!sourceProfile.write())
+                {
+                    FatalErrorInFunction
+                        << "M1C requested sourceProfile diagnostic write failed"
+                        << exit(FatalError);
+                }
+            }
         }
     }
 

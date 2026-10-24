@@ -95,6 +95,14 @@ physics, soil physics and air–soil coupling remain NOT IMPLEMENTED / NOT VALID
   response. R2 HT still differs 33.07% at 24³, and R3 HT is nonmonotone;
   no full grid independence or realistic source/soil validation is claimed.
   See `docs/m1c-14-fixed-receptor-findings.md` and geometry erratum.
+  M1C-15 optionally enables `sourceSpatialQuadrature cellTet4` for native
+  real-polyhedron 4-node positive tetra Gaussian volume quadrature, with
+  `writeSourceProfile true` for source diagnostics. The original cell-centre
+  kernel remains the default. Six native 3-D serial and one two-rank MPI
+  paired comparisons conserve prescribed source Bq, but R2 HT/HTO fixed
+  point errors become slightly worse on 8³/16³/24³. The alternate method
+  is experimental, NOT an accuracy improvement or a validated stack source;
+  see `docs/m1c-15-gaussian-cell-quadrature-findings.md`.
 - `src/soil/`: independent OpenFOAM 3-D porous-media and HT/HTO solver
   (M0 placeholder only).
 - `src/coupling/`: nonmatching 2-D air-soil conservative exchange
